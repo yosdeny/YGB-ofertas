@@ -25,8 +25,17 @@ if (!defined('ABSPATH')) {
             
             <?php if (!empty($producto['image'])) : ?>
             <div class="popup-image">
-                <img src="<?php echo esc_url($producto['image']); ?>" 
-                     alt="<?php echo esc_attr($producto['title']); ?>">
+                <?php
+                $ygb_image_alt = esc_attr($producto['title']);
+
+                if (!empty($producto['image_id'])) {
+                    // Adjunto de la biblioteca: srcset/sizes generados por WordPress.
+                    echo wp_get_attachment_image(absint($producto['image_id']), 'large', false, array('alt' => $ygb_image_alt));
+                } else {
+                    // Fallback (por ejemplo, imagen de producto sin ID resolvable).
+                    printf('<img src="%s" alt="%s">', esc_url($producto['image']), $ygb_image_alt);
+                }
+                ?>
             </div>
             <?php endif; ?>
             
@@ -40,8 +49,11 @@ if (!defined('ABSPATH')) {
                 <?php endif; ?>
             </div>
             
+            <?php if (!empty($producto['title']) || !empty($producto['description'])) : ?>
             <div class="popup-product">
+                <?php if (!empty($producto['title'])) : ?>
                 <h3 class="product-title"><?php echo esc_html($producto['title']); ?></h3>
+                <?php endif; ?>
                 
                 <?php if (!empty($producto['description'])) : ?>
                 <p class="product-description"><?php echo esc_html($producto['description']); ?></p>
@@ -58,6 +70,7 @@ if (!defined('ABSPATH')) {
                 </div>
                 <?php endif; ?>
             </div>
+            <?php endif; ?>
             
             <?php if (!empty($settings['description'])) : ?>
             <div class="popup-description">
@@ -70,7 +83,10 @@ if (!defined('ABSPATH')) {
                 <a href="<?php echo esc_url($producto['permalink']); ?>" 
                    class="popup-button"
                    style="background-color: <?php echo esc_attr($settings['button_color']); ?>;">
-                    <?php echo esc_html($settings['button_text']); ?>
+                    <?php
+                    $ygb_button_text = !empty($producto['button_text']) ? $producto['button_text'] : $settings['button_text'];
+                    echo esc_html($ygb_button_text);
+                    ?>
                 </a>
             </div>
             <?php endif; ?>

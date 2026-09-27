@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       YGB Ofertas
  * Description:       Plugin para mostrar popups de ofertas de productos compatible con el tema Astra.
- * Version:           1.7.10
+ * Version:           1.8.0
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            YGB
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Definir constantes
-define('YGB_OFERTAS_VERSION', '1.7.10');
+define('YGB_OFERTAS_VERSION', '1.8.0');
 define('YGB_OFERTAS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('YGB_OFERTAS_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -86,6 +86,16 @@ class YGB_Ofertas {
             'saved_text' => __('¡Guardado!', 'ygb-ofertas'),
             'error_text' => __('Error al guardar', 'ygb-ofertas')
         ));
+
+        // Selector de medios solo donde existe el campo de imagen (pestilla Producto).
+        if ('toplevel_page_ygb-ofertas' === $hook) {
+            wp_enqueue_media();
+
+            wp_localize_script('ygb-ofertas-admin', 'ygb_media', array(
+                'title' => __('Seleccionar imagen para el popup', 'ygb-ofertas'),
+                'button' => __('Usar esta imagen', 'ygb-ofertas')
+            ));
+        }
     }
     
     public function enqueue_scripts() {
@@ -149,10 +159,12 @@ class YGB_Ofertas {
         }
         
         // En modo producto se exige un producto valido y no excluido.
-        // En modo normal la validacion la hace get_custom_content().
+        // En los modos con contenido propio ('image' / 'custom') la validacion
+        // la hace get_custom_content(): basta con que haya imagen, titulo o
+        // texto; el enlace del boton es opcional en ambos casos.
         $type = isset($settings['popup_type']) ? (string) $settings['popup_type'] : 'product';
 
-        if ('custom' === $type) {
+        if ('product' !== $type) {
             if (null === $this->get_custom_content($settings)) {
                 return false;
             }
@@ -329,7 +341,10 @@ class YGB_Ofertas {
             'popup_type' => 'product',
             'custom_image_id' => '0',
             'custom_title' => '',
-            'custom_text' => ''
+            'custom_text' => '',
+            // Enlace opcional del modo normal: URL absoluta o '#id' para anclar
+            // a una seccion de la pagina actual. Vacio = sin boton.
+            'custom_link' => ''
         );
         
         $saved_settings = get_option('ygb_ofertas_settings', array());
@@ -350,34 +365,90 @@ class YGB_Ofertas {
     }
     
     /**
+     * Devuelve el enlace del boton del popup segun el tipo configurado.
+     *
+     * En modo producto es la URL del producto; en los modos con contenido propio
+     * es el enlace opcional introducido a mano (URL absoluta o ancla local).
+     * Cadena vacia = el popup se muestra sin boton.
+     */
+    private function get_popup_button_link($settings) {
+        $type = isset($settings['popup_type']) ? (string) $settings['popup_type'] : 'product';
+
+        if ('product' === $type) {
+            return esc_url_raw((string) get_permalink(absint($settings['selected_product'])));
+        }
+
+        $raw_link = trim((string) ($settings['custom_link'] ?? ''));
+
+        if ('' === $raw_link) {
+            return '';
+        }
+
+        if ('#' === $raw_link[0]) {
+            // Ancla local: solo caracteres seguros, si no se descarta.
+            return preg_match('/^#[A-Za-z0-9\-_.:]*$/', $raw_link) ? $raw_link : '';
+        }
+
+        $sanitized_link = esc_url_raw($raw_link);
+
+        // esc_url_raw() no añade protocolo a un dominio suelto ("ejemplo.com"),
+        // que generaria un href relativo roto; y devuelve cadena vacia para
+        // esquemas prohibidos (javascript:, data:). Ambos casos se descartan.
+        return ('' !== $sanitized_link && preg_match('#^[a-z]+://#i', $sanitized_link)) ? $sanitized_link : '';
+    }
+
+    /**
      * Resuelve el contenido del popup segun el tipo configurado.
      *
      * Devuelve un array normalizado con las claves que consume la plantilla, o
-     * null si no hay contenido mostrable. En modo 'custom' los precios van
-     * vacios y 'permalink' tambien: la plantilla omite ambos bloques.
+     * null si no hay contenido mostrable. En los modos con contenido propio los
+     * precios van vacios: la plantilla omite los bloques sin datos.
+     *
+     * Claves de salida: id, title, description, price, sale_price,
+     * regular_price, image, image_id, permalink, discount, button_text.
      */
     private function get_popup_content() {
         $settings = $this->get_popup_settings();
         $type = isset($settings['popup_type']) ? (string) $settings['popup_type'] : 'product';
 
-        if ('custom' === $type) {
-            return $this->get_custom_content($settings);
+        if ('product' !== $type) {
+            return $this->get_custom_content($settings, $type);
         }
 
         return $this->get_selected_product();
     }
 
     /**
-     * Contenido definido a mano: imagen de la biblioteca, titulo y texto.
-     * Sin precios ni enlace, porque no hay producto detras.
+     * Contenido definido a mano (modos 'image' y 'custom'): imagen de la
+     * biblioteca + titulo y texto opcionales + boton opcional.
+     *
+     * Diferencia entre modos:
+     * - 'image':  solo imagen; titulo y texto del popup quedan vacios.
+     * - 'custom': ademas muestra titulo y texto propios.
+     * Ambos aceptan un boton con enlace (URL absoluta o ancla #id).
      */
-    private function get_custom_content($settings) {
+    private function get_custom_content($settings, $type = 'custom') {
         $title = isset($settings['custom_title']) ? trim((string) $settings['custom_title']) : '';
         $text = isset($settings['custom_text']) ? trim((string) $settings['custom_text']) : '';
         $image_id = isset($settings['custom_image_id']) ? absint($settings['custom_image_id']) : 0;
 
         if ('' === $title && '' === $text && 0 === $image_id) {
             return null;
+        }
+
+        if ('image' === $type) {
+            // Modo mixto "solo imagen": se omite el bloque de titulo/texto del
+            // producto; si no se definio un titulo explicito, la imagen usa el
+            // nombre del adjunto como texto alternativo.
+            $text = '';
+
+            if (0 === $image_id) {
+                return null;
+            }
+
+            if ('' === $title) {
+                $title = trim((string) get_the_title($image_id));
+            }
         }
 
         return array(
@@ -387,9 +458,11 @@ class YGB_Ofertas {
             'price' => '',
             'sale_price' => '',
             'regular_price' => '',
-            'image' => $image_id > 0 ? wp_get_attachment_image_url($image_id, 'large') : '',
-            'permalink' => '',
+            'image' => wp_get_attachment_image_url($image_id, 'large'),
+            'image_id' => $image_id,
+            'permalink' => $this->get_popup_button_link($settings),
             'discount' => 0,
+            'button_text' => trim((string) ($settings['button_text'] ?? '')),
         );
     }
 
@@ -418,9 +491,11 @@ class YGB_Ofertas {
             'sale_price' => $product->get_sale_price(),
             'regular_price' => $product->get_regular_price(),
             'image' => wp_get_attachment_url($product->get_image_id()),
+            'image_id' => absint($product->get_image_id()),
             'permalink' => get_permalink($product_id),
             'description' => $product->get_short_description(),
-            'discount' => $this->calculate_discount($product)
+            'discount' => $this->calculate_discount($product),
+            'button_text' => trim((string) ($settings['button_text'] ?? ''))
         );
     }
     
@@ -500,7 +575,7 @@ class YGB_Ofertas {
                               'scroll_percentage', 'show_always', 'show_close_after', 'cookie_expiration',
                               'mobile_disabled', 'tablet_disabled', 'popup_status', 'start_date', 'end_date',
                               'specific_pages_only', 'pages', 'popup_type', 'custom_image_id', 'custom_title',
-                              'custom_text');
+                              'custom_text', 'custom_link');
         $data = array_intersect_key($data, array_flip($allowed_keys));
         
         $current_settings = get_option('ygb_ofertas_settings', array());
@@ -529,12 +604,13 @@ class YGB_Ofertas {
                 break;
                 
             case 'productos':
-                // Tipo de popup: solo se aceptan los dos modos soportados.
+                // Tipo de popup: solo se aceptan los modos soportados (allowlist).
                 $popup_type = isset($data['popup_type']) ? sanitize_key($data['popup_type']) : 'product';
-                $current_settings['popup_type'] = in_array($popup_type, ['product', 'custom'], true) ? $popup_type : 'product';
+                $current_settings['popup_type'] = in_array($popup_type, ['product', 'image', 'custom'], true) ? $popup_type : 'product';
 
-                if ('custom' === $current_settings['popup_type']) {
-                    // Imagen: solo el ID de un adjunto existente en la biblioteca.
+                if ('product' !== $current_settings['popup_type']) {
+                    // Modos 'image' y 'custom' comparten contenido propio:
+                    // imagen de biblioteca + titulo/texto opcionales.
                     $image_id = absint($data['custom_image_id'] ?? 0);
                     if ($image_id > 0 && 'attachment' !== get_post_type($image_id)) {
                         $image_id = 0;
@@ -544,8 +620,19 @@ class YGB_Ofertas {
                     $current_settings['custom_title'] = sanitize_text_field($data['custom_title'] ?? '');
                     $current_settings['custom_text'] = sanitize_textarea_field($data['custom_text'] ?? '');
 
-                    // El modo normal no depende del producto, pero se conserva
-                    // el valor guardado por si el usuario vuelve al modo producto.
+                    if ('custom' === $current_settings['popup_type']) {
+                        // En modo normal el boton es opcional: se acepta una URL
+                        // validada por esc_url_raw() o un ancla local (#id).
+                        // El resto de valores (javascript:, dominios sueltos...)
+                        // se descartan aqui y otra vez al renderizar.
+                        $link = trim((string) ($data['custom_link'] ?? ''));
+                        if ('' !== $link && '#' !== $link[0]) {
+                            $link = esc_url_raw($link);
+                        }
+                        $current_settings['custom_link'] = sanitize_text_field($link);
+                    }
+                    // El modo mixto no depende del producto, pero se conserva el
+                    // valor guardado por si el usuario vuelve al modo producto.
                     break;
                 }
 
@@ -829,6 +916,18 @@ class YGB_Ofertas {
         .remove-product:hover {
             color: #a00;
         }
+        #ygb-image-preview {
+            margin-bottom: 15px;
+        }
+        #ygb-image-preview img {
+            max-width: 260px;
+            max-height: 180px;
+            object-fit: cover;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            background: #fff;
+            display: block;
+        }
         .search-products {
             width: 100%;
             max-width: 400px;
@@ -998,23 +1097,57 @@ class YGB_Ofertas {
     }
     
     private function render_productos_tab($settings, $selected_product = null) {
+        $popup_type = isset($settings['popup_type']) ? (string) $settings['popup_type'] : 'product';
+        if (!in_array($popup_type, ['product', 'image', 'custom'], true)) {
+            $popup_type = 'product';
+        }
+
+        $image_id  = absint($settings['custom_image_id'] ?? 0);
+        $image_url = $image_id > 0 ? (string) wp_get_attachment_image_url($image_id, 'medium') : '';
+        $image_alt = $image_id > 0 ? trim((string) get_post_meta($image_id, '_wp_attachment_image_alt', true)) : '';
         ?>
         <table class="form-table">
             <tr>
-                <th scope="row"><?php _e('Producto a mostrar', 'ygb-ofertas'); ?></th>
+                <th scope="row"><?php esc_html_e('Tipo de contenido del popup', 'ygb-ofertas'); ?></th>
+                <td>
+                    <fieldset>
+                        <label style="display:block; margin-bottom:6px;">
+                            <input type="radio" name="popup_type" value="product" <?php checked('product', $popup_type); ?>>
+                            <strong><?php esc_html_e('Producto de WooCommerce', 'ygb-ofertas'); ?></strong>
+                            <span class="description"> &mdash; <?php esc_html_e('muestra la imagen, el precio y el boton con el enlace al producto.', 'ygb-ofertas'); ?></span>
+                        </label>
+                        <label style="display:block; margin-bottom:6px;">
+                            <input type="radio" name="popup_type" value="image" <?php checked('image', $popup_type); ?>>
+                            <strong><?php esc_html_e('Solo una imagen', 'ygb-ofertas'); ?></strong>
+                            <span class="description"> &mdash; <?php esc_html_e('sin producto: muestra una imagen de la biblioteca y, opcionalmente, un boton con enlace.', 'ygb-ofertas'); ?></span>
+                        </label>
+                        <label style="display:block;">
+                            <input type="radio" name="popup_type" value="custom" <?php checked('custom', $popup_type); ?>>
+                            <strong><?php esc_html_e('Imagen + texto propio', 'ygb-ofertas'); ?></strong>
+                            <span class="description"> &mdash; <?php esc_html_e('imagen mas un titulo y un texto escritos a mano.', 'ygb-ofertas'); ?></span>
+                        </label>
+                    </fieldset>
+                    <p class="description">
+                        <?php esc_html_e('El popup puede mezclar productos y contenido propio: cambia el tipo cuando quieras. La seleccion de producto y la imagen se conservan por separado.', 'ygb-ofertas'); ?>
+                    </p>
+                </td>
+            </tr>
+
+            <tr class="ygb-mode-product"<?php echo 'product' !== $popup_type ? ' style="display:none;"' : ''; ?>>
+                <th scope="row"><?php esc_html_e('Producto a mostrar', 'ygb-ofertas'); ?></th>
                 <td>
                     <div class="product-selector-container">
-                        <input type="text" 
-                               id="product-search" 
-                               class="search-products" 
-                               placeholder="<?php _e('Buscar producto por nombre o ID...', 'ygb-ofertas'); ?>" 
+                        <input type="text"
+                               id="product-search"
+                               class="search-products"
+                               placeholder="<?php esc_attr_e('Buscar producto por nombre o ID...', 'ygb-ofertas'); ?>"
                                autocomplete="off">
-                        
+
                         <div id="product-search-results" class="product-search-results"></div>
-                        
-                        <div id="selected-product-info" class="selected-product-info" <?php echo $selected_product ? '' : 'style="display:none;"'; ?>>
-                            <?php if ($selected_product): ?>
-                                <img src="<?php echo esc_url($selected_product['image']); ?>" alt="">
+
+                        <div id="selected-product-info" class="selected-product-info"<?php echo $selected_product ? '' : ' style="display:none;"'; ?>>
+                            <?php if ($selected_product) : ?>
+                                <img src="<?php echo esc_url((string) $selected_product['image']); ?>" alt="">
                                 <div class="selected-product-details">
                                     <h3><?php echo esc_html($selected_product['name']); ?></h3>
                                     <p><strong>ID:</strong> <?php echo esc_html((string) $selected_product['id']); ?></p>
@@ -1023,14 +1156,68 @@ class YGB_Ofertas {
                                 <a href="#" id="remove-product" class="remove-product"><?php esc_html_e('Quitar producto', 'ygb-ofertas'); ?></a>
                             <?php endif; ?>
                         </div>
-                        
+
                         <input type="hidden" name="selected_product" id="selected_product" value="<?php echo esc_attr($settings['selected_product']); ?>">
-                        
+
                         <p class="description">
-                            <?php esc_html_e('Selecciona el producto específico que quieres mostrar en el popup.', 'ygb-ofertas'); ?>
+                            <?php esc_html_e('Selecciona el producto especifico que quieres mostrar en el popup.', 'ygb-ofertas'); ?>
                         </p>
                     </div>
-             </tr>
+                </td>
+            </tr>
+
+            <tr class="ygb-mode-media"<?php echo 'product' === $popup_type ? ' style="display:none;"' : ''; ?>>
+                <th scope="row"><?php esc_html_e('Imagen del popup', 'ygb-ofertas'); ?></th>
+                <td>
+                    <div class="product-selector-container">
+                        <div id="ygb-image-preview"<?php echo '' === $image_url ? ' style="display:none;"' : ''; ?>>
+                            <img src="<?php echo esc_url($image_url); ?>" alt="<?php echo esc_attr($image_alt); ?>">
+                        </div>
+
+                        <p>
+                            <button type="button" class="button" id="ygb-select-image"><?php esc_html_e('Seleccionar imagen', 'ygb-ofertas'); ?></button>
+                            <button type="button" class="button button-link-delete" id="ygb-remove-image"<?php echo $image_id > 0 ? '' : ' style="display:none;"'; ?>><?php esc_html_e('Quitar imagen', 'ygb-ofertas'); ?></button>
+                        </p>
+
+                        <input type="hidden" name="custom_image_id" id="custom_image_id" value="<?php echo esc_attr((string) $image_id); ?>">
+
+                        <p class="description">
+                            <?php esc_html_e('Elige una imagen ya existente en la biblioteca de medios: desde aqui no se sube ningun archivo.', 'ygb-ofertas'); ?>
+                        </p>
+                    </div>
+                </td>
+            </tr>
+
+            <tr class="ygb-mode-media"<?php echo 'product' === $popup_type ? ' style="display:none;"' : ''; ?>>
+                <th scope="row"><?php esc_html_e('Enlace del boton (opcional)', 'ygb-ofertas'); ?></th>
+                <td>
+                    <input type="text"
+                           name="custom_link"
+                           id="custom_link"
+                           value="<?php echo esc_attr((string) ($settings['custom_link'] ?? '')); ?>"
+                           class="large-text code"
+                           placeholder="https://example.com/promocion  |  #seccion-de-la-pagina">
+                    <p class="description">
+                        <?php esc_html_e('URL absoluta o ancla local (#id). El texto del boton se define en la pestana General. Si lo dejas vacio, el popup se muestra sin boton.', 'ygb-ofertas'); ?>
+                    </p>
+                </td>
+            </tr>
+
+            <tr class="ygb-mode-custom"<?php echo 'custom' !== $popup_type ? ' style="display:none;"' : ''; ?>>
+                <th scope="row"><?php esc_html_e('Titulo del contenido', 'ygb-ofertas'); ?></th>
+                <td>
+                    <input type="text" name="custom_title" value="<?php echo esc_attr($settings['custom_title']); ?>" class="regular-text">
+                    <p class="description"><?php esc_html_e('Se muestra bajo el titulo principal del popup.', 'ygb-ofertas'); ?></p>
+                </td>
+            </tr>
+
+            <tr class="ygb-mode-custom"<?php echo 'custom' !== $popup_type ? ' style="display:none;"' : ''; ?>>
+                <th scope="row"><?php esc_html_e('Texto del contenido', 'ygb-ofertas'); ?></th>
+                <td>
+                    <textarea name="custom_text" rows="4" class="large-text"><?php echo esc_textarea($settings['custom_text']); ?></textarea>
+                    <p class="description"><?php esc_html_e('Texto libre sin HTML: solo saltos de linea y parrafos.', 'ygb-ofertas'); ?></p>
+                </td>
+            </tr>
         </table>
         <?php
     }
