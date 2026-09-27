@@ -268,7 +268,7 @@
         });
 
         /**
-         * Selector de medios (imagen del popup en modo mixto/normal)
+         * Selector de medios (imagen del popup en el modo "Solo una imagen")
          */
         var mediaFrame = null;
 
@@ -339,7 +339,6 @@
 
             $('.ygb-mode-product').toggle(type === 'product');
             $('.ygb-mode-media').toggle(type !== 'product');
-            $('.ygb-mode-custom').toggle(type === 'custom');
         }
 
         $(document).on('change', 'input[name="popup_type"]', updatePopupTypeVisibility);
