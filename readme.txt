@@ -64,6 +64,10 @@ Está desarrollado y probado con Astra, pero al usar hooks estándar de WordPres
 
 == Changelog ==
 
+= 1.8.1 = 
+ * Eliminada la opcion "Imagen + texto propio" del tipo de contenido del popup: su titulo y su texto se mezclaban con el titulo y la descripcion generales del popup y resultaba confuso. El popup vuelve a ofrecer dos tipos de contenido: producto de WooCommerce o solo una imagen (ambos con boton opcional). 
+ * Migracion automatica: las instalaciones que tenian activo ese modo pasan a "Solo una imagen" si habia una imagen guardada; si no, vuelven al modo producto. Los campos `custom_title` y `custom_text` dejan de leerse, guardarse y renderizarse.
+
 = 1.8.0 =
 * En el modo **Solo una imagen** (sin producto) el alto de la imagen es libre: se quita el `max-height` fijo y el recorte (`object-fit: cover`) para que la imagen del popup se vea completa, sin cortes.
 * La vista previa de la imagen en el panel de configuración tampoco limita el alto, por coherencia con lo que se verá en el popup.
