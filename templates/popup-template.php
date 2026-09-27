@@ -5,7 +5,7 @@ if (!defined('ABSPATH')) {
 }
 ?>
 
-<div id="ygb-ofertas-popup" class="ygb-ofertas-popup popup-<?php echo esc_attr($settings['animation']); ?>"<?php echo $producto['id'] > 0 ? ' data-product-id="' . esc_attr($producto['id']) . '"' : ''; ?>
+<div id="ygb-ofertas-popup" class="ygb-ofertas-popup popup-<?php echo esc_attr($settings['animation']); ?> ygb-type-<?php echo esc_attr(isset($popup_type) ? $popup_type : 'product'); ?>"<?php echo $producto['id'] > 0 ? ' data-product-id="' . esc_attr($producto['id']) . '"' : ''; ?>
      style="display: none;">
     
     <div class="popup-overlay" style="background-color: <?php echo esc_attr($settings['overlay_color']); ?>;"></div>

@@ -64,6 +64,10 @@ Está desarrollado y probado con Astra, pero al usar hooks estándar de WordPres
 
 == Changelog ==
 
+= 1.8.0 =
+* En el modo **Solo una imagen** (sin producto) el alto de la imagen es libre: se quita el `max-height` fijo y el recorte (`object-fit: cover`) para que la imagen del popup se vea completa, sin cortes.
+* La vista previa de la imagen en el panel de configuración tampoco limita el alto, por coherencia con lo que se verá en el popup.
+
 = 1.7.10 =
 * Corrección del error `ygb_ofertas is not defined`: el plugin se inicializa ahora en `init` (prioridad 0) en lugar de `plugins_loaded`, donde la clase `WooCommerce` aún podía no estar definida.
 * Carga del textdomain reenganchada a `init` con prioridad 1 para que no quede sin ejecutar tras el cambio anterior.

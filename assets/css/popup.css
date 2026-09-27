@@ -80,6 +80,14 @@
     display: block;
 }
 
+/* Modo "Solo una imagen": el alto de la imagen queda libre para que la
+   imagen se vea completa, sin recortarla con un alto fijo. */
+.ygb-ofertas-popup.ygb-type-image .popup-image img {
+    height: auto;
+    max-height: none;
+    object-fit: fill;
+}
+
 .popup-header {
     display: flex;
     align-items: center;
