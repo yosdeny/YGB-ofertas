@@ -2,24 +2,45 @@
 /**
  * Uninstall handler de YGB Ofertas.
  *
- * WordPress ejecuta automáticamente este archivo cuando el usuario pulsa
- * "Eliminar" en la lista de plugins (delete_plugins() de
- * wp-admin/includes/plugin.php). Se borra TODO lo que el plugin crea:
+ * IMPORTANTE: este archivo SOLO afecta al plugin "YGB Ofertas"
+ * (ygb-ofertas/ygb-ofertas.php). No toca, ni puede tocar, los archivos de
+ * ningún otro plugin: uninstall.php se ejecuta únicamente cuando WordPress
+ * elimina ESTE plugin, y todas las consultas están filtradas por claves que
+ * empiezan por 'ygb_' / '_ygb_', que son exclusivas de este plugin.
  *
- *   1. Opciones de la tabla {prefix}_options (configuración y productos
- *      excluidos) y cualquier opción/transient con prefijo del plugin.
+ * WordPress ejecuta este archivo automáticamente cuando el usuario pulsa
+ * "Eliminar" en la lista de plugins (delete_plugins() de
+ * wp-admin/includes/plugin.php). Se borra TODO lo que ESTE plugin crea:
+ *
+ *   1. Opciones de la tabla {prefix}_options:
+ *        - ygb_ofertas_settings          (configuración del popup)
+ *        - ygb_ofertas_excluded_products (productos excluidos)
+ *      y cualquier otra opción/transient cuyo nombre empiece por 'ygb_'.
  *   2. Transients y sus timeouts (_transient_ygb_*, _transient_timeout_ygb_*).
- *   3. Metadata creada por el plugin: post meta, comment meta, user meta,
- *      term meta y blog meta (esta última solo en multisite).
- *   4. Roles y capacidades propios del plugin (los roles del core NO se tocan,
- *      solo se les retiran las capacidades 'ygb_*').
- *   5. Archivos y carpetas generados dentro de wp-content/uploads.
+ *   3. Metadata creada por el plugin: post meta (p. ej. '_ygb_views' y las
+ *      estadísticas del popup), comment meta, user meta, term meta y blog meta
+ *      (esta última solo en multisite).
+ *   4. Roles y capacidades propios (el plugin actual no crea ninguno; se limpian
+ *      por si una versión futura los añade. Los roles del core NO se borran,
+ *      solo se les retirarían capacidades 'ygb_*').
+ *   5. Archivos generados dentro de wp-content/uploads (el plugin actual no
+ *      escribe ahí; se contempla para futuras versiones).
  *   6. En multisite se limpia cada sitio de la red y también las opciones
  *      de red (sitemeta).
  *
- * Las cookies de navegador ('ygb_ofertas_shown') viven solo en el equipo del
- * visitante, por lo que no es posible borrarlas desde el servidor; se elimina
- * su fuente (los ajustes que las generan).
+ * Lo que NO se borra (y no debe borrarse):
+ *   - Los archivos del propio plugin: eso ya lo hace WordPress antes de
+ *     ejecutar este script.
+ *   - Los productos/pedidos de WooCommerce ni ninguna tabla de otros plugins.
+ *   - Claves de otros plugins: LIKE 'ygb\_%' escapa el guion bajo, así que
+ *     solo coincide con el literal 'ygb_' (nada de 'ygbx_...' ni de otros
+ *     prefijos).
+ *   - La cookie de navegador 'ygb_ofertas_shown': vive en el equipo del
+ *     visitante y caduca sola; no es accesible desde el servidor.
+ *
+ * Nota de diseño: aquí no se listan funciones auxiliares con `function_exists()`
+ * porque en un uninstall de WordPress siempre están disponibles (wp-load ya está
+ * cargado). Evitarlas previene colisiones de nombre con otros plugins.
  *
  * @package YGB_Ofertas
  * @since   1.8.2
@@ -36,18 +57,31 @@ if (!defined('WP_UNINSTALL_PLUGIN')) {
 define('YGB_OFERTAS_UNINSTALL_BASENAME', 'ygb-ofertas/ygb-ofertas.php');
 
 /**
- * Claves de opción creadas explícitamente por el plugin.
+ * Claves de opción creadas explícitamente por ESTE plugin
+ * (ver ygb-ofertas.php: update_option/get_option/register_setting).
  *
  * @var string[]
  */
 $ygb_ofertas_options = array(
-    'ygb_ofertas_settings',          // Configuración general del popup.
-    'ygb_ofertas_excluded_products', // Productos excluidos (metabox y pestaña).
+    'ygb_ofertas_settings',          // register_setting / get_option / update_option.
+    'ygb_ofertas_excluded_products', // register_setting + metabox de productos excluidos.
+);
+
+/**
+ * Claves de post meta escritas por este plugin o documentadas como suyas.
+ * Se listan de forma explícita además de barrer los prefijos, para que el
+ * borrado sea preciso y nunca dependa de un LIKE "amplio".
+ *
+ * @var string[]
+ */
+$ygb_ofertas_post_meta_keys = array(
+    '_ygb_views', // Contador de vistas citado en el hook 'ygb_ofertas_popup_stat'.
 );
 
 /**
  * Prefijos de clave usados por el plugin para metadata y transients.
- * Cualquier clave que empiece por alguno de ellos es propiedad del plugin.
+ * Cualquier clave que empiece por alguno de ellos es propiedad exclusiva de
+ * este plugin (los guiones bajos se escapan con esc_like() en cada consulta).
  *
  * @var string[]
  */
@@ -55,6 +89,10 @@ $ygb_ofertas_meta_prefixes = array('_ygb_', 'ygb_');
 
 /**
  * Carpetas (dentro de wp-content/uploads) que el plugin pudo haber creado.
+ *
+ * El plugin actual no escribe archivos en uploads; se incluyen por si una
+ * versión futura los genera. Solo se borran estas carpetas concretas, nunca
+ * nada del resto de wp-content ni de otros plugins.
  *
  * @var string[]
  */
@@ -146,9 +184,9 @@ function ygb_ofertas_meta_table($meta_type) {
  * del plugin, usando delete_metadata_by_mid() (API de WordPress) en lugar de
  * SQL directo en el borrado.
  *
- * Nota: se recorren las filas por meta_id porque es la única forma de borrar
- * claves del plugin cuyo nombre exacto no se conoce (por ejemplo, las
- * estadísticas registradas a través del hook 'ygb_ofertas_popup_stat').
+ * Se recorren las filas por meta_id porque es la única forma de borrar claves
+ * del plugin cuyo nombre exacto no se conoce (por ejemplo, las estadísticas
+ * registradas a través del hook 'ygb_ofertas_popup_stat').
  *
  * @param string   $meta_type 'post' | 'comment' | 'term' | 'user' | 'blog'.
  * @param string[] $prefixes  Prefijos de clave a eliminar.
@@ -162,11 +200,22 @@ function ygb_ofertas_delete_metadata_by_prefix($meta_type, $prefixes) {
         return 0;
     }
 
+    // Una condición LIKE por prefijo: así nunca se asume que existan exactamente 2.
+    $like_parts    = array();
+    $like_args     = array();
+    foreach ($prefixes as $prefix) {
+        $like_parts[] = 'meta_key LIKE %s';
+        $like_args[]  = $wpdb->esc_like($prefix) . '%';
+    }
+
+    if (empty($like_parts)) {
+        return 0;
+    }
+
     $ids = $wpdb->get_col(
         $wpdb->prepare(
-            "SELECT meta_id FROM {$table} WHERE meta_key LIKE %s OR meta_key LIKE %s", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-            $wpdb->esc_like($prefixes[0]) . '%',
-            $wpdb->esc_like($prefixes[1]) . '%'
+            "SELECT meta_id FROM {$table} WHERE " . implode(' OR ', $like_parts), // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            $like_args
         )
     );
 
@@ -187,6 +236,9 @@ function ygb_ofertas_delete_metadata_by_prefix($meta_type, $prefixes) {
 /**
  * Elimina los roles creados por el plugin y retira las capacidades 'ygb_*'
  * de los roles restantes (incluidos los del core, que nunca se borran).
+ *
+ * El plugin actual no registra roles ni capacidades; esto es una red de
+ * seguridad para versiones futuras.
  *
  * @return void
  */
@@ -226,41 +278,47 @@ function ygb_ofertas_remove_roles_and_caps() {
 /**
  * Limpia todos los datos del plugin correspondientes a UN sitio.
  *
- * @param string[] $option_names    Claves de opción concretas a borrar.
- * @param string[] $meta_prefixes   Prefijos de metadata a borrar.
- * @param string[] $upload_dirs     Carpetas a borrar dentro de uploads.
+ * @param string[] $option_names  Claves de opción concretas a borrar.
+ * @param string[] $meta_prefixes Prefijos de metadata/opciones a borrar.
+ * @param string[] $upload_dirs   Carpetas a borrar dentro de uploads.
  * @return void
  */
 function ygb_ofertas_purge_site_data($option_names, $meta_prefixes, $upload_dirs) {
+    global $wpdb;
+
     // -------------------------------------------------------------------------
-    // 1) Opciones concretas del plugin.
+    // 1) Opciones concretas del plugin + sus transients (delete_transient ya
+    //    elimina '_transient_X' y '_transient_timeout_X').
     // -------------------------------------------------------------------------
     foreach ($option_names as $option_name) {
         delete_option($option_name);
-    }
-
-    // -------------------------------------------------------------------------
-    // 2) Transients y timeouts del plugin.
-    //    delete_transient() ya elimina '_transient_X' y '_transient_timeout_X'.
-    // -------------------------------------------------------------------------
-    foreach ($option_names as $option_name) {
         delete_transient($option_name);
     }
 
-    // Cualquier opción o transient cuyo nombre empiece por los prefijos.
-    // El guion bajo es un comodín de LIKE, así que se escapa con esc_like()
-    // para que solo coincida con el literal 'ygb_' / '_ygb_'.
+    // -------------------------------------------------------------------------
+    // 2) Cualquier opción o transient cuyo nombre empiece por los prefijos.
+    //    El guion bajo es comodín de LIKE, así que se escapa con esc_like()
+    //    para que solo coincida con el literal 'ygb_' / '_ygb_' y nunca con
+    //    claves de otros plugins.
+    // -------------------------------------------------------------------------
     foreach ($meta_prefixes as $prefix) {
-        global $wpdb;
-
         foreach (ygb_ofertas_get_option_names_like($wpdb->esc_like($prefix) . '%') as $name) {
             delete_option($name);
         }
     }
 
     // -------------------------------------------------------------------------
-    // 3) Metadata (post, comentario, término, usuario y, en multisite, blog).
+    // 3) Metadata: primero las claves conocidas (borrado exacto, sin LIKE) y
+    //    después un barrido por prefijo por si quedaron claves del plugin.
+    //    (post, comentario, término, usuario y, en multisite, blog).
     // -------------------------------------------------------------------------
+    global $ygb_ofertas_post_meta_keys;
+    if (is_array($ygb_ofertas_post_meta_keys)) {
+        foreach ($ygb_ofertas_post_meta_keys as $ygb_ofertas_meta_key) {
+            delete_post_meta_by_key($ygb_ofertas_meta_key);
+        }
+    }
+
     ygb_ofertas_delete_metadata_by_prefix('post', $meta_prefixes);
     ygb_ofertas_delete_metadata_by_prefix('comment', $meta_prefixes);
     ygb_ofertas_delete_metadata_by_prefix('term', $meta_prefixes);
@@ -268,12 +326,12 @@ function ygb_ofertas_purge_site_data($option_names, $meta_prefixes, $upload_dirs
     ygb_ofertas_delete_metadata_by_prefix('blog', $meta_prefixes);
 
     // -------------------------------------------------------------------------
-    // 4) Roles y capacidades.
+    // 4) Roles y capacidades propios (hoy no crea ninguno; red de seguridad).
     // -------------------------------------------------------------------------
     ygb_ofertas_remove_roles_and_caps();
 
     // -------------------------------------------------------------------------
-    // 5) Archivos generados en wp-content/uploads.
+    // 5) Archivos generados en wp-content/uploads (solo las carpetas indicadas).
     // -------------------------------------------------------------------------
     $uploads = wp_get_upload_dir();
     if (!empty($uploads['basedir']) && empty($uploads['error'])) {
@@ -319,17 +377,25 @@ if (is_multisite()) {
         delete_site_option($ygb_ofertas_option);
     }
 
-    $ygb_ofertas_network_names = $GLOBALS['wpdb']->get_col(
-        $GLOBALS['wpdb']->prepare(
-            "SELECT meta_key FROM {$GLOBALS['wpdb']->sitemeta} WHERE meta_key LIKE %s OR meta_key LIKE %s", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-            $GLOBALS['wpdb']->esc_like('ygb_') . '%',
-            $GLOBALS['wpdb']->esc_like('_ygb_') . '%'
-        )
-    );
+    $ygb_ofertas_network_parts = array();
+    $ygb_ofertas_network_args  = array();
+    foreach ($ygb_ofertas_meta_prefixes as $ygb_ofertas_prefix) {
+        $ygb_ofertas_network_parts[] = 'meta_key LIKE %s';
+        $ygb_ofertas_network_args[]  = $GLOBALS['wpdb']->esc_like($ygb_ofertas_prefix) . '%';
+    }
 
-    if (is_array($ygb_ofertas_network_names)) {
-        foreach ($ygb_ofertas_network_names as $ygb_ofertas_network_name) {
-            delete_site_option($ygb_ofertas_network_name);
+    if (!empty($ygb_ofertas_network_parts)) {
+        $ygb_ofertas_network_names = $GLOBALS['wpdb']->get_col(
+            $GLOBALS['wpdb']->prepare(
+                "SELECT meta_key FROM {$GLOBALS['wpdb']->sitemeta} WHERE " . implode(' OR ', $ygb_ofertas_network_parts), // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+                $ygb_ofertas_network_args
+            )
+        );
+
+        if (is_array($ygb_ofertas_network_names)) {
+            foreach ($ygb_ofertas_network_names as $ygb_ofertas_network_name) {
+                delete_site_option($ygb_ofertas_network_name);
+            }
         }
     }
 } else {
