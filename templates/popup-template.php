@@ -33,6 +33,15 @@ if (!defined('ABSPATH')) {
             // no llega definido, asumimos 'product' para no romper el layout
             // clásico del plugin.
             $ygb_popup_type = isset($popup_type) ? (string) $popup_type : 'product';
+
+            // Estilo del botón: 'theme' hereda los estilos del tema (clases
+            // 'button' y, si procede, 'wp-block-button__link'); 'custom' usa
+            // el color configurado en el panel con el aspecto propio del
+            // plugin.
+            $ygb_button_style = isset($settings['button_style']) ? (string) $settings['button_style'] : 'theme';
+            if (!in_array($ygb_button_style, ['theme', 'custom'], true)) {
+                $ygb_button_style = 'theme';
+            }
             ?>
             
             <?php if (!empty($producto['image'])) : ?>
@@ -96,13 +105,37 @@ if (!defined('ABSPATH')) {
             
             <?php if (!empty($producto['permalink'])) : ?>
             <div class="popup-actions">
+                <?php
+                // Clases base del botón (siempre presentes: popup.js engancha
+                // el tracking de 'click' a .popup-button).
+                $ygb_button_classes = array('popup-button');
+
+                // Atributos inline: solo cuando el estilo es 'custom' se
+                // aplica el color configurado. En 'theme' el botón hereda el
+                // aspecto del tema (clase .button y, en block themes,
+                // .wp-block-button__link).
+                $ygb_button_attrs = '';
+
+                if ('theme' === $ygb_button_style) {
+                    // Clase estándar de WordPress/Astra. Cualquier tema
+                    // decente la estiliza (fondo, borde, padding, hover...).
+                    $ygb_button_classes[] = 'button';
+
+                    // Añadimos también la clase de los botones de bloque, que
+                    // es la que usan los temas FSE / block themes modernos.
+                    // Es inocua en temas clásicos: si no existe la regla, no
+                    // hace nada.
+                    $ygb_button_classes[] = 'wp-block-button__link';
+                } else {
+                    $ygb_button_classes[] = 'popup-button--custom';
+                    $ygb_button_attrs     = ' style="background-color: ' . esc_attr($settings['button_color']) . ';"';
+                }
+
+                $ygb_button_text = !empty($producto['button_text']) ? $producto['button_text'] : $settings['button_text'];
+                ?>
                 <a href="<?php echo esc_url($producto['permalink']); ?>" 
-                   class="popup-button"
-                   style="background-color: <?php echo esc_attr($settings['button_color']); ?>;">
-                    <?php
-                    $ygb_button_text = !empty($producto['button_text']) ? $producto['button_text'] : $settings['button_text'];
-                    echo esc_html($ygb_button_text);
-                    ?>
+                   class="<?php echo esc_attr(implode(' ', $ygb_button_classes)); ?>"<?php echo $ygb_button_attrs; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- ya escapado arriba ?>>
+                    <?php echo esc_html($ygb_button_text); ?>
                 </a>
             </div>
             <?php endif; ?>

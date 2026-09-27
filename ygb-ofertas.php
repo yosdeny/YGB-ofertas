@@ -55,13 +55,28 @@ class YGB_Ofertas {
         add_action('wp_ajax_ygb_search_products', array($this, 'ajax_search_products'));
         add_action('wp_ajax_ygb_save_tab', array($this, 'ajax_save_tab'));
         
-        // Añadir meta box para activar/desactivar por producto
-        add_action('add_meta_boxes', array($this, 'add_product_metabox'));
-        add_action('save_post_product', array($this, 'save_product_metabox'));
+        // Añadir meta box para activar/desactivar por producto.
+        // Solo se registra si WooCommerce está activo: sin él no existe el
+        // custom post type 'product' y el metabox no tendría dónde aparecer.
+        if ($this->is_woocommerce_active()) {
+            add_action('add_meta_boxes', array($this, 'add_product_metabox'));
+            add_action('save_post_product', array($this, 'save_product_metabox'));
+        }
     }
     
     public function init() {
         load_plugin_textdomain('ygb-ofertas', false, dirname(plugin_basename(__FILE__)) . '/languages');
+    }
+
+    /**
+     * Comprueba si WooCommerce está activo.
+     *
+     * El plugin es funcional sin WooCommerce en el modo "Solo una imagen".
+     * Todas las rutas que dependen de productos de WooCommerce pasan por
+     * esta comprobación.
+     */
+    private function is_woocommerce_active() {
+        return class_exists('WooCommerce');
     }
     
     public function admin_enqueue_scripts($hook) {
@@ -141,10 +156,10 @@ class YGB_Ofertas {
         }
 
         $settings = $this->get_popup_settings();
-        // Tipo de popup actual ('product', 'image' o 'custom'): la plantilla lo
-        // usa para adaptar el estilo de la imagen (en 'image' el alto es libre).
+        // Tipo de popup actual ('product' o 'image'): la plantilla lo usa para
+        // adaptar el estilo de la imagen (en 'image' el alto es libre).
         $popup_type = isset($settings['popup_type']) ? (string) $settings['popup_type'] : 'product';
-        if (!in_array($popup_type, ['product', 'image', 'custom'], true)) {
+        if (!in_array($popup_type, ['product', 'image'], true)) {
             $popup_type = 'product';
         }
         include $template;
@@ -167,6 +182,11 @@ class YGB_Ofertas {
         // En el modo 'image' la validacion la hace get_custom_content(): basta
         // con que haya una imagen de la biblioteca; el enlace del boton es
         // opcional.
+        //
+        // Nota: get_popup_settings() ya normaliza popup_type a 'image' cuando
+        // WooCommerce no está activo, así que aquí no hace falta volver a
+        // comprobarlo: si el ajuste guardado era 'product' y no hay WC, el
+        // tipo efectivo será 'image'.
         $type = isset($settings['popup_type']) ? (string) $settings['popup_type'] : 'product';
 
         if ('product' !== $type) {
@@ -174,6 +194,10 @@ class YGB_Ofertas {
                 return false;
             }
         } else {
+            if (!$this->is_woocommerce_active()) {
+                return false;
+            }
+
             if (empty($settings['selected_product'])) {
                 return false;
             }
@@ -321,6 +345,10 @@ class YGB_Ofertas {
             'description' => '',
             'button_text' => 'Ver Producto',
             'button_color' => '#007cba',
+            // Estilo del botón: 'theme' hereda los estilos del tema
+            // (añade las clases 'button' y 'wp-block-button__link' al <a>);
+            // 'custom' usa el color configurado en button_color.
+            'button_style' => 'theme',
             'text_color' => '#333333',
             'background_color' => '#ffffff',
             'overlay_color' => 'rgba(0,0,0,0.7)',
@@ -378,6 +406,16 @@ class YGB_Ofertas {
             $this->settings['popup_type'] = 'product';
         }
 
+        // Sin WooCommerce el modo producto no puede resolver nada: no hay CPT
+        // 'product', no hay wc_get_product() y el popup quedaría muerto aunque
+        // el usuario tenga configurada una imagen. Se fuerza 'image' SOLO en
+        // memoria, sin sobrescribir la opcion guardada, para que al reactivar
+        // WooCommerce se recupere automaticamente el modo producto con su
+        // producto seleccionado intacto.
+        if (!$this->is_woocommerce_active() && 'product' === $this->settings['popup_type']) {
+            $this->settings['popup_type'] = 'image';
+        }
+
         return $this->settings;
     }
     
@@ -392,6 +430,9 @@ class YGB_Ofertas {
         $type = isset($settings['popup_type']) ? (string) $settings['popup_type'] : 'product';
 
         if ('product' === $type) {
+            if (!$this->is_woocommerce_active()) {
+                return '';
+            }
             return esc_url_raw((string) get_permalink(absint($settings['selected_product'])));
         }
 
@@ -477,6 +518,11 @@ class YGB_Ofertas {
     }
 
     private function get_selected_product() {
+        // Sin WooCommerce no hay productos que resolver.
+        if (!$this->is_woocommerce_active()) {
+            return null;
+        }
+
         $settings = $this->get_popup_settings();
         
         if (empty($settings['selected_product'])) {
@@ -527,6 +573,11 @@ class YGB_Ofertas {
         }
         
         check_ajax_referer('ygb_admin_nonce', 'nonce');
+
+        // Sin WooCommerce no hay productos que buscar.
+        if (!$this->is_woocommerce_active()) {
+            wp_send_json_error('WooCommerce no está activo');
+        }
         
         $search = isset($_POST['search']) ? sanitize_text_field(wp_unslash($_POST['search'])) : '';
         
@@ -581,6 +632,7 @@ class YGB_Ofertas {
         // MEJORA: Validar claves permitidas para evitar datos no deseados
         $allowed_keys = array('enabled', 'title', 'description', 'button_text', 'button_color', 'text_color', 
                               'background_color', 'overlay_color', 'animation', 'width', 'close_button', 
+                              'button_style',
                               'selected_product', 'display_delay', 'show_on_exit', 'show_on_scroll', 
                               'scroll_percentage', 'show_always', 'show_close_after', 'cookie_expiration',
                               'mobile_disabled', 'tablet_disabled', 'popup_status', 'start_date', 'end_date',
@@ -601,6 +653,10 @@ class YGB_Ofertas {
                 
             case 'diseno':
                 $current_settings['button_color'] = $this->sanitize_hex_color($data['button_color'] ?? '#007cba');
+
+                $button_style = isset($data['button_style']) ? sanitize_key($data['button_style']) : 'theme';
+                $current_settings['button_style'] = in_array($button_style, ['theme', 'custom'], true) ? $button_style : 'theme';
+
                 $current_settings['text_color'] = $this->sanitize_hex_color($data['text_color'] ?? '#333333');
                 $current_settings['background_color'] = $this->sanitize_hex_color($data['background_color'] ?? '#ffffff');
                 $current_settings['overlay_color'] = $this->sanitize_rgba_color($data['overlay_color'] ?? 'rgba(0,0,0,0.7)');
@@ -614,6 +670,27 @@ class YGB_Ofertas {
                 break;
                 
             case 'productos':
+                // Sin WooCommerce el único modo posible es "Solo una imagen".
+                // Se guarda la imagen y el enlace, y se ignora por completo
+                // cualquier valor de tipo de producto que llegue del formulario.
+                if (!$this->is_woocommerce_active()) {
+                    $current_settings['popup_type'] = 'image';
+
+                    $image_id = absint($data['custom_image_id'] ?? 0);
+                    if ($image_id > 0 && 'attachment' !== get_post_type($image_id)) {
+                        $image_id = 0;
+                    }
+                    $current_settings['custom_image_id'] = (string) $image_id;
+
+                    $link = trim((string) ($data['custom_link'] ?? ''));
+                    if ('' !== $link && '#' !== $link[0]) {
+                        $link = esc_url_raw($link);
+                    }
+                    $current_settings['custom_link'] = sanitize_text_field($link);
+
+                    break;
+                }
+
                 // Tipo de popup: solo se aceptan los modos soportados (allowlist).
                 $popup_type = isset($data['popup_type']) ? sanitize_key($data['popup_type']) : 'product';
                 $current_settings['popup_type'] = in_array($popup_type, ['product', 'image'], true) ? $popup_type : 'product';
@@ -741,14 +818,17 @@ class YGB_Ofertas {
             array($this, 'render_admin_page')
         );
         
-        add_submenu_page(
-            'ygb-ofertas',
-            __('Productos Excluidos', 'ygb-ofertas'),
-            __('Productos Excluidos', 'ygb-ofertas'),
-            'manage_options',
-            'ygb-ofertas-excluded',
-            array($this, 'render_excluded_products_page')
-        );
+        // La página de productos excluidos solo tiene sentido con WooCommerce.
+        if ($this->is_woocommerce_active()) {
+            add_submenu_page(
+                'ygb-ofertas',
+                __('Productos Excluidos', 'ygb-ofertas'),
+                __('Productos Excluidos', 'ygb-ofertas'),
+                'manage_options',
+                'ygb-ofertas-excluded',
+                array($this, 'render_excluded_products_page')
+            );
+        }
     }
     
     public function register_settings() {
@@ -779,7 +859,7 @@ class YGB_Ofertas {
         $settings = $this->get_popup_settings();
         
         $selected_product = null;
-        if (!empty($settings['selected_product'])) {
+        if ($this->is_woocommerce_active() && !empty($settings['selected_product'])) {
             $product = wc_get_product(intval($settings['selected_product']));
             if ($product) {
                 $selected_product = array(
@@ -793,6 +873,15 @@ class YGB_Ofertas {
         ?>
         <div class="wrap">
             <h1><?php _e('Configuración YGB Ofertas', 'ygb-ofertas'); ?></h1>
+
+            <?php if (!$this->is_woocommerce_active()) : ?>
+                <div class="notice notice-warning">
+                    <p>
+                        <strong><?php esc_html_e('WooCommerce no está activo.', 'ygb-ofertas'); ?></strong>
+                        <?php esc_html_e('El modo "Producto de WooCommerce" no está disponible. Puedes seguir usando el popup en modo "Solo una imagen": sube una imagen a la biblioteca, selecciónala y configura el popup con normalidad. Si instalas y activas WooCommerce, el modo producto se habilitará automáticamente y conservarás la configuración actual.', 'ygb-ofertas'); ?>
+                    </p>
+                </div>
+            <?php endif; ?>
             
             <div id="ygb-save-notice" class="notice" style="display:none;"></div>
             
@@ -1018,13 +1107,41 @@ class YGB_Ofertas {
     }
     
     private function render_diseno_tab($settings) {
+        $button_style = isset($settings['button_style']) ? (string) $settings['button_style'] : 'theme';
+        if (!in_array($button_style, ['theme', 'custom'], true)) {
+            $button_style = 'theme';
+        }
         ?>
         <table class="form-table">
+            <tr>
+                <th scope="row"><?php _e('Estilo del Botón', 'ygb-ofertas'); ?></th>
+                <td>
+                    <fieldset>
+                        <label style="display:block; margin-bottom:6px;">
+                            <input type="radio" name="button_style" value="theme" <?php checked('theme', $button_style); ?>>
+                            <strong><?php esc_html_e('Usar el estilo del tema', 'ygb-ofertas'); ?></strong>
+                            <span class="description"> &mdash; <?php esc_html_e('el boton hereda el aspecto de los botones del sitio (Astra, block themes, etc.).', 'ygb-ofertas'); ?></span>
+                        </label>
+                        <label style="display:block;">
+                            <input type="radio" name="button_style" value="custom" <?php checked('custom', $button_style); ?>>
+                            <strong><?php esc_html_e('Estilo personalizado', 'ygb-ofertas'); ?></strong>
+                            <span class="description"> &mdash; <?php esc_html_e('el boton usa el color configurado abajo, con el aspecto propio del plugin.', 'ygb-ofertas'); ?></span>
+                        </label>
+                    </fieldset>
+                    <p class="description">
+                        <?php esc_html_e('Si el tema no define estilos de boton, la opcion "Usar el estilo del tema" aplica un aspecto neutro y legible.', 'ygb-ofertas'); ?>
+                    </p>
+                </td>
+            </tr>
+
             <tr>
                 <th scope="row"><?php _e('Color del Botón', 'ygb-ofertas'); ?></th>
                 <td>
                     <input type="color" name="button_color" value="<?php echo esc_attr($settings['button_color']); ?>">
                     <code><?php echo esc_attr($settings['button_color']); ?></code>
+                    <p class="description">
+                        <?php esc_html_e('Solo se aplica cuando el estilo del boton es "Estilo personalizado".', 'ygb-ofertas'); ?>
+                    </p>
                 </td>
             </tr>
             
@@ -1089,9 +1206,19 @@ class YGB_Ofertas {
     }
     
     private function render_productos_tab($settings, $selected_product = null) {
+        $woocommerce_active = $this->is_woocommerce_active();
+
         $popup_type = isset($settings['popup_type']) ? (string) $settings['popup_type'] : 'product';
         if (!in_array($popup_type, ['product', 'image'], true)) {
             $popup_type = 'product';
+        }
+
+        // Sin WooCommerce el único modo posible es "Solo una imagen". Se
+        // fuerza en el render para que el panel muestre la sección correcta
+        // aunque el ajuste guardado sea 'product' (p. ej. porque el usuario
+        // desactivó WooCommerce después).
+        if (!$woocommerce_active) {
+            $popup_type = 'image';
         }
 
         $image_id  = absint($settings['custom_image_id'] ?? 0);
@@ -1103,8 +1230,8 @@ class YGB_Ofertas {
                 <th scope="row"><?php esc_html_e('Tipo de contenido del popup', 'ygb-ofertas'); ?></th>
                 <td>
                     <fieldset>
-                        <label style="display:block; margin-bottom:6px;">
-                            <input type="radio" name="popup_type" value="product" <?php checked('product', $popup_type); ?>>
+                        <label style="display:block; margin-bottom:6px;<?php echo $woocommerce_active ? '' : ' opacity:0.5;'; ?>">
+                            <input type="radio" name="popup_type" value="product" <?php checked('product', $popup_type); ?> <?php disabled(!$woocommerce_active, true); ?>>
                             <strong><?php esc_html_e('Producto de WooCommerce', 'ygb-ofertas'); ?></strong>
                             <span class="description"> &mdash; <?php esc_html_e('muestra la imagen, el precio y el boton con el enlace al producto.', 'ygb-ofertas'); ?></span>
                         </label>
@@ -1114,9 +1241,16 @@ class YGB_Ofertas {
                             <span class="description"> &mdash; <?php esc_html_e('sin producto: muestra una imagen de la biblioteca y, opcionalmente, un boton con enlace.', 'ygb-ofertas'); ?></span>
                         </label>
                     </fieldset>
-                    <p class="description">
-                        <?php esc_html_e('Puedes alternar entre los dos tipos cuando quieras: la seleccion de producto y la imagen se conservan por separado.', 'ygb-ofertas'); ?>
-                    </p>
+
+                    <?php if (!$woocommerce_active) : ?>
+                        <p class="description" style="color:#b32d2e;">
+                            <?php esc_html_e('WooCommerce no está activo: el modo "Producto de WooCommerce" está deshabilitado. El popup funcionará en modo "Solo una imagen" hasta que actives WooCommerce.', 'ygb-ofertas'); ?>
+                        </p>
+                    <?php else : ?>
+                        <p class="description">
+                            <?php esc_html_e('Puedes alternar entre los dos tipos cuando quieras: la seleccion de producto y la imagen se conservan por separado.', 'ygb-ofertas'); ?>
+                        </p>
+                    <?php endif; ?>
                 </td>
             </tr>
 
@@ -1352,6 +1486,19 @@ class YGB_Ofertas {
     }
     
     public function render_excluded_products_page() {
+        // Sin WooCommerce no hay productos que excluir.
+        if (!$this->is_woocommerce_active()) {
+            ?>
+            <div class="wrap">
+                <h1><?php esc_html_e('Productos Excluidos del Popup', 'ygb-ofertas'); ?></h1>
+                <div class="notice notice-warning">
+                    <p><?php esc_html_e('WooCommerce no está activo. La lista de productos excluidos solo está disponible cuando WooCommerce está instalado y activo.', 'ygb-ofertas'); ?></p>
+                </div>
+            </div>
+            <?php
+            return;
+        }
+
         $excluded = get_option('ygb_ofertas_excluded_products', array());
         if (!is_array($excluded)) {
             $excluded = array();
@@ -1541,20 +1688,6 @@ class YGB_Ofertas {
 }
 
 /**
- * Aviso de administración cuando WooCommerce no está activo.
- */
-function ygb_ofertas_missing_woocommerce_notice() {
-    if (!current_user_can('activate_plugins')) {
-        return;
-    }
-    ?>
-    <div class="notice notice-error">
-        <p><?php esc_html_e('YGB Ofertas requiere WooCommerce instalado y activado.', 'ygb-ofertas'); ?></p>
-    </div>
-    <?php
-}
-
-/**
  * Arranca el plugin.
  *
  * Se engancha a 'init' (prioridad 0) y no a 'plugins_loaded' porque
@@ -1562,13 +1695,17 @@ function ygb_ofertas_missing_woocommerce_notice() {
  * y el orden de carga entre plugins no está garantizado: comprobar
  * class_exists('WooCommerce') en 'plugins_loaded' puede dar false aunque
  * WooCommerce esté activo.
+ *
+ * El plugin se instancia SIEMPRE. Sin WooCommerce solo se desactivan las
+ * rutas que dependen de productos (modo producto, buscador AJAX, metabox,
+ * página de excluidos); el modo "Solo una imagen" sigue funcionando.
+ *
+ * El aviso de "WooCommerce no está activo" NO se engancha aquí: se muestra
+ * dentro de render_admin_page(), solo en las páginas del plugin. Un aviso
+ * global en admin_notices aparecería en todo el escritorio en cada carga
+ * (is-dismissible no persiste el cierre por sí solo) y resultaría intrusivo.
  */
 function ygb_ofertas_init() {
-    if (!class_exists('WooCommerce')) {
-        add_action('admin_notices', 'ygb_ofertas_missing_woocommerce_notice');
-        return;
-    }
-
     return YGB_Ofertas::get_instance();
 }
 add_action('init', 'ygb_ofertas_init', 0);
