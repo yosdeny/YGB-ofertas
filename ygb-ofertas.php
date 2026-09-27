@@ -142,6 +142,12 @@ class YGB_Ofertas {
         }
 
         $settings = $this->get_popup_settings();
+        // Tipo de popup actual ('product', 'image' o 'custom'): la plantilla lo
+        // usa para adaptar el estilo de la imagen (en 'image' el alto es libre).
+        $popup_type = isset($settings['popup_type']) ? (string) $settings['popup_type'] : 'product';
+        if (!in_array($popup_type, ['product', 'image', 'custom'], true)) {
+            $popup_type = 'product';
+        }
         include $template;
     }
     
@@ -917,8 +923,9 @@ class YGB_Ofertas {
         }
         #ygb-image-preview img {
             max-width: 260px;
-            max-height: 180px;
-            object-fit: cover;
+            height: auto;
+            max-height: none;
+            object-fit: fill;
             border-radius: 4px;
             border: 1px solid #ddd;
             background: #fff;
