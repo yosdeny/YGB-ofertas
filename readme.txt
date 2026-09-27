@@ -65,7 +65,7 @@ Está desarrollado y probado con Astra, pero al usar hooks estándar de WordPres
 == Changelog ==
 
 = 1.8.2 =
-* Añadido `uninstall.php`: al eliminar **este** plugin desde wp-admin se borra automáticamente todo lo que crea (opciones `ygb_ofertas_settings` y `ygb_ofertas_excluded_products`, transients, post meta `_ygb_views` y resto de metadata con prefijo `ygb_`/`_ygb_`, roles y capacidades propias y la carpeta `wp-content/uploads/ygb-ofertas`). En multisite se limpian todos los sitios de la red y las opciones de red. No toca en ningún caso datos ni archivos de otros plugins: todas las consultas usan patrones `LIKE 'ygb\_%'` con el guion bajo escapado.
+* Añadido `uninstall.php`: al eliminar **este** plugin desde wp-admin se borran únicamente las claves que crea YGB Ofertas, por nombre exacto: las opciones `ygb_ofertas_settings` y `ygb_ofertas_excluded_products` y la post meta `_ygb_views`. En multisite se recorre cada sitio de la red y también se limpian las opciones de red homónimas. **No hay ningún barrido por prefijo** (`LIKE 'ygb_%'` / `'_ygb_%'`): nada de tocar datos ni archivos de otros plugins (por ejemplo los de un futuro `ygb-animal`), ni roles, ni capacidades, ni el filesystem.
 
 = 1.8.1 = 
  * Eliminada la opcion "Imagen + texto propio" del tipo de contenido del popup: su titulo y su texto se mezclaban con el titulo y la descripcion generales del popup y resultaba confuso. El popup vuelve a ofrecer dos tipos de contenido: producto de WooCommerce o solo una imagen (ambos con boton opcional). 
