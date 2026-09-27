@@ -4,7 +4,7 @@ Tags: woocommerce, ofertas, popup, descuentos, marketing
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 8.0
-Stable tag: 1.7.10
+Stable tag: 1.8.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -63,6 +63,10 @@ Está desarrollado y probado con Astra, pero al usar hooks estándar de WordPres
 4. Pestaña Programación: rango de fechas y páginas específicas.
 
 == Changelog ==
+
+= 1.8.1 =
+* Eliminada la opcion "Imagen + texto propio" del tipo de contenido del popup: su titulo y su texto se mezclaban con el titulo y la descripcion generales del popup y resultaba confuso. El popup vuelve a ofrecer dos tipos de contenido: producto de WooCommerce o solo una imagen (ambos con boton opcional).
+* Migracion automatica: las instalaciones que tenian activo ese modo pasan a "Solo una imagen" si habia una imagen guardada; si no, vuelven al modo producto. Los campos `custom_title` y `custom_text` dejan de leerse, guardarse y renderizarse.
 
 = 1.7.10 =
 * Corrección del error `ygb_ofertas is not defined`: el plugin se inicializa ahora en `init` (prioridad 0) en lugar de `plugins_loaded`, donde la clase `WooCommerce` aún podía no estar definida.
