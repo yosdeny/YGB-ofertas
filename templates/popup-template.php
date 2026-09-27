@@ -6,22 +6,34 @@ if (!defined('ABSPATH')) {
 ?>
 
 <div id="ygb-ofertas-popup" class="ygb-ofertas-popup popup-<?php echo esc_attr($settings['animation']); ?> ygb-type-<?php echo esc_attr(isset($popup_type) ? $popup_type : 'product'); ?>"<?php echo $producto['id'] > 0 ? ' data-product-id="' . esc_attr($producto['id']) . '"' : ''; ?>
-     style="display: none;">
+     style="display: none;"
+     role="dialog"
+     aria-modal="true"
+     aria-label="<?php echo esc_attr($settings['title']); ?>"
+     aria-hidden="true">
     
     <div class="popup-overlay" style="background-color: <?php echo esc_attr($settings['overlay_color']); ?>;"></div>
     
     <div class="popup-container" 
-         style="max-width: <?php echo esc_attr($settings['width']); ?>px; 
+         style="--ygb-popup-width: <?php echo esc_attr($settings['width']); ?>px;
+                max-width: <?php echo esc_attr($settings['width']); ?>px; 
                 background-color: <?php echo esc_attr($settings['background_color']); ?>;
                 color: <?php echo esc_attr($settings['text_color']); ?>;">
         
         <?php if ($settings['close_button']) : ?>
-        <button class="popup-close" aria-label="Cerrar">
-            <span>&times;</span>
+        <button type="button" class="popup-close" aria-label="<?php esc_attr_e('Cerrar popup', 'ygb-ofertas'); ?>">
+            <span aria-hidden="true">&times;</span>
         </button>
         <?php endif; ?>
         
         <div class="popup-content">
+            
+            <?php
+            // Tipo de popup efectivo ('product' o 'image'). Si por lo que sea
+            // no llega definido, asumimos 'product' para no romper el layout
+            // clásico del plugin.
+            $ygb_popup_type = isset($popup_type) ? (string) $popup_type : 'product';
+            ?>
             
             <?php if (!empty($producto['image'])) : ?>
             <div class="popup-image">
@@ -39,37 +51,41 @@ if (!defined('ABSPATH')) {
             </div>
             <?php endif; ?>
             
-            <div class="popup-header">
-                <h2 class="popup-title"><?php echo esc_html($settings['title']); ?></h2>
+            <?php if ('product' === $ygb_popup_type) : ?>
                 
-                <?php if (!empty($producto['discount']) && $producto['discount'] > 0) : ?>
-                <div class="popup-discount-badge">
-                    -<?php echo esc_html($producto['discount']); ?>%
+                <div class="popup-header">
+                    <h2 class="popup-title"><?php echo esc_html($settings['title']); ?></h2>
+                    
+                    <?php if (!empty($producto['discount']) && $producto['discount'] > 0) : ?>
+                    <div class="popup-discount-badge">
+                        -<?php echo esc_html($producto['discount']); ?>%
+                    </div>
+                    <?php endif; ?>
                 </div>
-                <?php endif; ?>
-            </div>
-            
-            <?php if (!empty($producto['title']) || !empty($producto['description'])) : ?>
-            <div class="popup-product">
-                <?php if (!empty($producto['title'])) : ?>
-                <h3 class="product-title"><?php echo esc_html($producto['title']); ?></h3>
-                <?php endif; ?>
                 
-                <?php if (!empty($producto['description'])) : ?>
-                <p class="product-description"><?php echo esc_html($producto['description']); ?></p>
-                <?php endif; ?>
-                
-                <?php if (!empty($producto['price']) || !empty($producto['sale_price'])) : ?>
-                <div class="product-price">
-                    <?php if (!empty($producto['sale_price'])) : ?>
-                        <span class="price-sale"><?php echo wc_price($producto['sale_price']); ?></span>
-                        <span class="price-regular"><?php echo wc_price($producto['regular_price']); ?></span>
-                    <?php else : ?>
-                        <span class="price-regular"><?php echo wc_price($producto['price']); ?></span>
+                <?php if (!empty($producto['title']) || !empty($producto['description'])) : ?>
+                <div class="popup-product">
+                    <?php if (!empty($producto['title'])) : ?>
+                    <h3 class="product-title"><?php echo esc_html($producto['title']); ?></h3>
+                    <?php endif; ?>
+                    
+                    <?php if (!empty($producto['description'])) : ?>
+                    <p class="product-description"><?php echo esc_html($producto['description']); ?></p>
+                    <?php endif; ?>
+                    
+                    <?php if (!empty($producto['price']) || !empty($producto['sale_price'])) : ?>
+                    <div class="product-price">
+                        <?php if (!empty($producto['sale_price'])) : ?>
+                            <span class="price-sale"><?php echo wc_price($producto['sale_price']); ?></span>
+                            <span class="price-regular"><?php echo wc_price($producto['regular_price']); ?></span>
+                        <?php else : ?>
+                            <span class="price-regular"><?php echo wc_price($producto['price']); ?></span>
+                        <?php endif; ?>
+                    </div>
                     <?php endif; ?>
                 </div>
                 <?php endif; ?>
-            </div>
+                
             <?php endif; ?>
             
             <?php if (!empty($settings['description'])) : ?>
@@ -93,7 +109,7 @@ if (!defined('ABSPATH')) {
             
             <?php if ($settings['show_close_after']) : ?>
             <div class="popup-footer">
-                <button class="popup-close-link"><?php _e('Cerrar', 'ygb-ofertas'); ?></button>
+                <button type="button" class="popup-close-link"><?php _e('Cerrar', 'ygb-ofertas'); ?></button>
             </div>
             <?php endif; ?>
             

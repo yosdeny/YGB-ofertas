@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       YGB Ofertas
  * Description:       Plugin para mostrar popups de ofertas de productos compatible con el tema Astra.
- * Version:           1.8.1
+ * Version:           1.8.2
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            YGB
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Definir constantes
-define('YGB_OFERTAS_VERSION', '1.8.1');
+define('YGB_OFERTAS_VERSION', '1.8.2');
 define('YGB_OFERTAS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('YGB_OFERTAS_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -37,7 +37,12 @@ class YGB_Ofertas {
     
     private function __construct() {
         $this->init_hooks();
-        $this->register_late_hooks();
+
+        // La instancia se crea dentro de 'init' (prioridad 0), así que
+        // 'init' ya está en marcha: llamamos al textdomain directamente en
+        // lugar de registrar otro callback a 'init' que podría no llegar a
+        // dispararse.
+        $this->init();
     }
     
     private function init_hooks() {
@@ -45,7 +50,6 @@ class YGB_Ofertas {
         add_action('wp_footer', array($this, 'render_popup'));
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_init', array($this, 'register_settings'));
-        add_action('admin_notices', array($this, 'show_admin_notices'));
         add_action('admin_enqueue_scripts', array($this, 'admin_enqueue_scripts'));
         add_action('wp_ajax_save_popup_stats', array($this, 'save_popup_stats'));
         add_action('wp_ajax_ygb_search_products', array($this, 'ajax_search_products'));
@@ -59,21 +63,16 @@ class YGB_Ofertas {
     public function init() {
         load_plugin_textdomain('ygb-ofertas', false, dirname(plugin_basename(__FILE__)) . '/languages');
     }
-
-    /**
-     * Mueve la carga del textdomain a 'init' con prioridad 1.
-     *
-     * La instancia del plugin se crea dentro de 'init' prioridad 0, así que
-     * registrar add_action('init', ...) en ese momento es demasiado tarde:
-     * 'init' ya se está ejecutando y la llamada no se dispararía. Se registra
-     * aquí explícitamente con prioridad 1 para que sí llegue a ejecutarse.
-     */
-    private function register_late_hooks() {
-        add_action('init', array($this, 'init'), 1);
-    }
     
     public function admin_enqueue_scripts($hook) {
-        if (!str_contains((string) $hook, 'ygb-ofertas')) {
+        // Match exacto por hook. Evita cargar assets en pantallas que
+        // contengan 'ygb-ofertas' como substring en otro contexto.
+        $allowed_hooks = array(
+            'toplevel_page_ygb-ofertas',
+            'ygb-ofertas_page_ygb-ofertas-excluded',
+        );
+
+        if (!in_array($hook, $allowed_hooks, true)) {
             return;
         }
         
@@ -455,6 +454,10 @@ class YGB_Ofertas {
         $title = trim((string) get_post_meta($image_id, '_wp_attachment_image_alt', true));
 
         if ('' === $title) {
+            // Fallback al titulo del adjunto (WordPress lo deriva del nombre
+            // del archivo la primera vez que se sube). Se usa SOLO como
+            // atributo alt de la imagen; nunca se renderiza como nombre de
+            // producto.
             $title = trim((string) get_the_title($image_id));
         }
 
@@ -763,20 +766,6 @@ class YGB_Ofertas {
         }
         
         return array();
-    }
-    
-    public function show_admin_notices() {
-        $settings_updated = isset($_GET['settings-updated'])
-            ? sanitize_key(wp_unslash($_GET['settings-updated']))
-            : '';
-
-        if ('true' === $settings_updated) {
-            ?>
-            <div class="notice notice-success is-dismissible">
-                <p><?php _e('Configuración guardada correctamente.', 'ygb-ofertas'); ?></p>
-            </div>
-            <?php
-        }
     }
     
     public function render_admin_page() {

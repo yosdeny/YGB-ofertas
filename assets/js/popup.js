@@ -2,7 +2,7 @@
  * YGB Ofertas - Popup JavaScript
  * 
  * @package YGB_Ofertas
- * @version 1.7.4
+ * @version 1.8.2
  */
 
 (function($) {
@@ -40,6 +40,16 @@
         }
 
         /**
+         * Convierte un ajuste numerico a float. Necesario para ajustes que
+         * admiten decimales (p. ej. display_delay, que el panel configura
+         * con step="0.5"); parseInt perderia la parte decimal.
+         */
+        function to_float(value, fallback) {
+            var parsed = parseFloat(value);
+            return isNaN(parsed) ? fallback : parsed;
+        }
+
+        /**
          * Inicializar el popup
          */
         function initPopup() {
@@ -61,7 +71,7 @@
             // Configurar triggers
             setupTriggers();
 
-            var delay = to_int(settings.display_delay, 0);
+            var delay = to_float(settings.display_delay, 0);
             var has_trigger = is_on('show_on_exit') || is_on('show_on_scroll');
 
             // Sin triggers propios: mostrar tras el delay configurado.
@@ -191,7 +201,16 @@
                 
                 clearTimeout(scrollTimeout);
                 scrollTimeout = setTimeout(function() {
-                    var scrollPercent = ($(window).scrollTop() / ($(document).height() - $(window).height())) * 100;
+                    var docHeight = $(document).height() - $(window).height();
+
+                    // Si la página cabe entera en el viewport, docHeight es 0
+                    // (o negativo en casos raros). Dividir daría Infinity y
+                    // dispararía el popup sin que el usuario haga scroll.
+                    if (docHeight <= 0) {
+                        return;
+                    }
+
+                    var scrollPercent = ($(window).scrollTop() / docHeight) * 100;
                     
                     if (scrollPercent >= to_int(settings.scroll_percentage, 50)) {
                         triggered = true;
@@ -203,12 +222,15 @@
 
         /**
          * Establecer cookie
+         *
+         * SameSite=Lax evita que la cookie viaje en requests cross-site,
+         * que es lo correcto para una cookie de estado de UI.
          */
         function setCookie() {
-            var days = parseInt(settings.cookie_expiration) || 1;
+            var days = parseInt(settings.cookie_expiration, 10) || 1;
             var date = new Date();
             date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
-            document.cookie = 'ygb_ofertas_shown=1; expires=' + date.toUTCString() + '; path=/';
+            document.cookie = 'ygb_ofertas_shown=1; expires=' + date.toUTCString() + '; path=/; SameSite=Lax';
         }
 
         /**

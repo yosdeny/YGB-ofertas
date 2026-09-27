@@ -52,7 +52,7 @@
 }
 
 .popup-close:hover {
-    color: #ff0000; /* Cambia a rojo al hacer hover */
+    color: #ff0000;
     background: transparent;
 }
 
@@ -66,26 +66,56 @@
 }
 
 .popup-image {
-    margin: -30px -30px 20px -30px;
     text-align: center;
     line-height: 0;
 }
 
-.popup-image img {
-    width: 100%;
-    height: auto;
-    max-height: 250px;
-    object-fit: cover;
-    border-radius: 8px 8px 0 0;
-    display: block;
+/* ------------------------------------------------------------------
+   MODO PRODUCTO: marco de 300x300 px exactos en escritorio, pegado al
+   borde superior del popup. Cero blanco arriba ni abajo.
+   ------------------------------------------------------------------ */
+.ygb-ofertas-popup.ygb-type-product .popup-image {
+    width: 300px;
+    height: 300px;
+    margin: -30px auto 20px auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background: #ffffff;
 }
 
-/* Modo "Solo una imagen": el alto de la imagen queda libre para que la
-   imagen se vea completa, sin recortarla con un alto fijo. */
+.ygb-ofertas-popup.ygb-type-product .popup-image img {
+    display: block !important;
+    width: 300px !important;
+    height: 300px !important;
+    max-width: none !important;
+    max-height: none !important;
+    object-fit: contain !important;
+    aspect-ratio: auto !important;
+    margin: 0 !important;
+    border-radius: 0;
+}
+
+/* ------------------------------------------------------------------
+   MODO IMAGEN: tamano natural, limitado al ancho en pixeles del popup.
+   ------------------------------------------------------------------ */
+.ygb-ofertas-popup.ygb-type-image .popup-image {
+    margin: -30px -30px 20px -30px;
+    line-height: 0;
+    text-align: center;
+}
+
 .ygb-ofertas-popup.ygb-type-image .popup-image img {
-    height: auto;
-    max-height: none;
-    object-fit: fill;
+    display: block !important;
+    width: auto !important;
+    height: auto !important;
+    max-width: var(--ygb-popup-width, 500px) !important;
+    max-height: none !important;
+    object-fit: contain !important;
+    aspect-ratio: auto !important;
+    margin: 0 auto !important;
+    border-radius: 8px 8px 0 0;
 }
 
 .popup-header {
@@ -139,13 +169,13 @@
 .price-sale {
     font-size: 24px;
     font-weight: bold;
-    color: #e74c3c;
+    color: #ff0000;
 }
 
 .price-regular {
     font-size: 16px;
     text-decoration: line-through;
-    color: #999;
+    color: #ff0000;
 }
 
 .popup-description {
@@ -196,76 +226,90 @@
 
 /* Animaciones */
 @keyframes popupFadeIn {
-    from {
-        opacity: 0;
-    }
-    to {
-        opacity: 1;
-    }
+    from { opacity: 0; }
+    to   { opacity: 1; }
 }
 
 @keyframes popupSlideIn {
-    from {
-        transform: translateY(-30px);
-        opacity: 0;
-    }
-    to {
-        transform: translateY(0);
-        opacity: 1;
-    }
+    from { transform: translateY(-30px); opacity: 0; }
+    to   { transform: translateY(0);     opacity: 1; }
 }
 
 @keyframes popupZoomIn {
-    from {
-        transform: scale(0.8);
-        opacity: 0;
-    }
-    to {
-        transform: scale(1);
-        opacity: 1;
-    }
+    from { transform: scale(0.8); opacity: 0; }
+    to   { transform: scale(1);   opacity: 1; }
 }
 
-.popup-fade .popup-container {
-    animation-name: popupFadeIn;
-}
-
-.popup-slide .popup-container {
-    animation-name: popupSlideIn;
-}
-
-.popup-zoom .popup-container {
-    animation-name: popupZoomIn;
-}
+.popup-fade .popup-container  { animation-name: popupFadeIn; }
+.popup-slide .popup-container { animation-name: popupSlideIn; }
+.popup-zoom .popup-container  { animation-name: popupZoomIn; }
 
 /* Responsive */
 @media (max-width: 768px) {
     .popup-content {
         padding: 20px;
     }
-    
-    .popup-image {
-        margin: -20px -20px 15px -20px;
-    }
-    
+
     .popup-title {
         font-size: 20px;
     }
-    
+
     .price-sale {
         font-size: 20px;
     }
-    
+
     .popup-button {
         padding: 10px 20px;
         font-size: 14px;
     }
-    
+
     .popup-close {
         top: 8px;
         right: 8px;
         width: 28px;
         height: 28px;
         font-size: 22px;
+    }
+
+    /* ------------------------------------------------------------------
+       MODO PRODUCTO en movil:
+       - Alto fijo de 250 px.
+       - Ancho adaptado al hueco disponible del popup.
+       - 5 px de aire arriba para que la imagen no quede pegada al borde
+         superior (muchas fotos de producto no llevan margen propio).
+       - La imagen se centra y mantiene su proporcion sin recortarse.
+       ------------------------------------------------------------------ */
+    .ygb-ofertas-popup.ygb-type-product .popup-image {
+        width: 100%;
+        height: 250px;
+        margin: -20px 0 15px 0;
+        padding-top: 5px;
+        box-sizing: border-box;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        background: #ffffff;
+    }
+
+    .ygb-ofertas-popup.ygb-type-product .popup-image img {
+        display: block !important;
+        width: auto !important;
+        height: 100% !important;
+        max-width: 100% !important;
+        max-height: 100% !important;
+        object-fit: contain !important;
+        aspect-ratio: auto !important;
+        margin: 0 !important;
+        border-radius: 0;
+    }
+
+    /* Modo imagen en movil: limitamos al hueco disponible. */
+    .ygb-ofertas-popup.ygb-type-image .popup-image {
+        margin: -20px -20px 15px -20px;
+    }
+
+    .ygb-ofertas-popup.ygb-type-image .popup-image img {
+        max-width: calc(90vw - 40px) !important;
     }
 }

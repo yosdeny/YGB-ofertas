@@ -4,7 +4,7 @@ Tags: woocommerce, ofertas, popup, descuentos, marketing
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 8.0
-Stable tag: 1.8.1
+Stable tag: 1.8.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -23,6 +23,7 @@ Características principales:
 * Programación por fechas: mostrar de inmediato o dentro de un rango de fecha/hora de inicio y fin.
 * Segmentación por dispositivo: desactivar en móviles y/o tablets.
 * Restricción por páginas: mostrar solo en páginas seleccionadas (inicio, tienda, carrito, finalizar compra, etc.).
+* Dos tipos de contenido: producto de WooCommerce o solo una imagen (ambos con botón opcional).
 * Lista de productos excluidos para impedir que aparezcan en el popup.
 * Compatible con el tema Astra.
 
@@ -59,17 +60,29 @@ Está desarrollado y probado con Astra, pero al usar hooks estándar de WordPres
 
 1. Pestaña General: estado del popup, título, descripción y texto del botón.
 2. Pestaña Diseño: colores, animación y ancho del popup.
-3. Pestaña Producto: buscador AJAX de productos de WooCommerce.
+3. Pestaña Producto: buscador AJAX de productos de WooCommerce y modo "Solo una imagen".
 4. Pestaña Programación: rango de fechas y páginas específicas.
 
 == Changelog ==
 
 = 1.8.2 =
-* Añadido `uninstall.php`: al eliminar **este** plugin desde wp-admin se borran únicamente las claves que crea YGB Ofertas, por nombre exacto: las opciones `ygb_ofertas_settings` y `ygb_ofertas_excluded_products` y la post meta `_ygb_views`. En multisite se recorre cada sitio de la red y también se limpian las opciones de red homónimas. **No hay ningún barrido por prefijo** (`LIKE 'ygb_%'` / `'_ygb_%'`): nada de tocar datos ni archivos de otros plugins (por ejemplo los de un futuro `ygb-animal`), ni roles, ni capacidades, ni el filesystem.
+* `uninstall.php` reescrito con prefijos EXCLUSIVOS del plugin (`ygb_ofertas_` / `_ygb_ofertas_`): al desinstalar ya no se borran opciones, transients, metadata, roles ni capacidades de otros plugins que pudieran compartir el prefijo genérico `ygb_`. La limpieza de multisite ahora pagina en lotes de 500 sitios en lugar de usar un tope fijo.
+* Corregida la pérdida de decimales en "Retraso en la visualización": `popup.js` usa `parseFloat` en lugar de `parseInt`, así que un valor de 5.5 s se respeta.
+* Corregida la división por cero en el trigger de scroll: si la página cabe entera en el viewport, el popup ya no se dispara sin que el usuario haya hecho scroll.
+* Cookie `ygb_ofertas_shown` con `SameSite=Lax` para evitar su envío en peticiones cross-site.
+* Eliminado el aviso de administración muerto que leía `settings-updated` (los ajustes se guardan por AJAX, nunca llega ese parámetro).
+* Simplificada la carga del textdomain: se llama directamente desde el constructor en lugar de registrar un callback extra a `init` que podía no dispararse.
+* `admin_enqueue_scripts()` usa coincidencia exacta de hook en lugar de `str_contains`, para no cargar assets en pantallas ajenas con ese substring.
+* Accesibilidad del popup: `role="dialog"`, `aria-modal="true"`, `aria-hidden`, `aria-label` traducible y `type="button"` en los botones de cierre. El símbolo `×` queda como decorativo (`aria-hidden`).
+* En el modo "Solo una imagen" ya no se renderiza el bloque de nombre y precio del producto: la plantilla condiciona `.popup-header` y `.popup-product` al tipo `product`. El título del adjunto se sigue usando solo como atributo `alt` de la imagen.
+* Imagen responsiva en modo imagen: se dimensiona contra el ancho en píxeles del popup (variable `--ygb-popup-width`) en lugar de un 100% relativo; mantiene la proporción original sin recortes ni deformaciones.
+* Imagen de producto en un marco cuadrado de 300×300 px en escritorio (pequeño ajuste en móvil), con `object-fit: contain`, centrada y sin recortes.
+* Precio del producto en color rojo (`#ff0000`).
+* Unificada la versión en todos los ficheros a 1.8.2 (antes había discrepancias entre el header, la constante, `admin.js`, `popup.js` y este readme).
 
-= 1.8.1 = 
- * Eliminada la opcion "Imagen + texto propio" del tipo de contenido del popup: su titulo y su texto se mezclaban con el titulo y la descripcion generales del popup y resultaba confuso. El popup vuelve a ofrecer dos tipos de contenido: producto de WooCommerce o solo una imagen (ambos con boton opcional). 
- * Migracion automatica: las instalaciones que tenian activo ese modo pasan a "Solo una imagen" si habia una imagen guardada; si no, vuelven al modo producto. Los campos `custom_title` y `custom_text` dejan de leerse, guardarse y renderizarse.
+= 1.8.1 =
+* Eliminada la opción "Imagen + texto propio" del tipo de contenido del popup: su título y su texto se mezclaban con el título y la descripción generales del popup y resultaba confuso. El popup vuelve a ofrecer dos tipos de contenido: producto de WooCommerce o solo una imagen (ambos con botón opcional).
+* Migración automática: las instalaciones que tenían activo ese modo pasan a "Solo una imagen" si había una imagen guardada; si no, vuelven al modo producto. Los campos `custom_title` y `custom_text` dejan de leerse, guardarse y renderizarse.
 
 = 1.8.0 =
 * En el modo **Solo una imagen** (sin producto) el alto de la imagen es libre: se quita el `max-height` fijo y el recorte (`object-fit: cover`) para que la imagen del popup se vea completa, sin cortes.
@@ -101,6 +114,11 @@ Está desarrollado y probado con Astra, pero al usar hooks estándar de WordPres
 
 == Upgrade Notice ==
 
-= 1.8.1 = 
- * Eliminada la opcion "Imagen + texto propio" del tipo de contenido del popup: su titulo y su texto se mezclaban con el titulo y la descripcion generales del popup y resultaba confuso. El popup vuelve a ofrecer dos tipos de contenido: producto de WooCommerce o solo una imagen (ambos con boton opcional). 
- * Migracion automatica: las instalaciones que tenian activo ese modo pasan a "Solo una imagen" si habia una imagen guardada; si no, vuelven al modo producto. Los campos `custom_title` y `custom_text` dejan de leerse, guardarse y renderizarse.
+= 1.8.2 =
+* Corregido el `uninstall.php`: usa prefijos exclusivos del plugin para no borrar datos de otros plugins al desinstalar. Si vas a eliminar YGB Ofertas, actualiza primero a esta versión.
+* Diversas correcciones de robustez en el frontend (decimales del delay, scroll sin overflow, SameSite en la cookie).
+* Mejoras de accesibilidad y de maquetación del popup.
+
+= 1.8.1 =
+* Eliminada la opción "Imagen + texto propio" del tipo de contenido del popup: su título y su texto se mezclaban con el título y la descripción generales del popup y resultaba confuso. El popup vuelve a ofrecer dos tipos de contenido: producto de WooCommerce o solo una imagen (ambos con botón opcional).
+* Migración automática: las instalaciones que tenían activo ese modo pasan a "Solo una imagen" si había una imagen guardada; si no, vuelven al modo producto. Los campos `custom_title` y `custom_text` dejan de leerse, guardarse y renderizarse.

@@ -329,20 +329,32 @@ if (isset($_GET['plugin']) && sanitize_text_field(wp_unslash($_GET['plugin'])) !
 }
 
 if (is_multisite()) {
-    // Multisite: limpiar uno por uno todos los sitios de la red.
-    $ygb_ofertas_site_ids = get_sites(array('fields' => 'ids', 'number' => 100000));
+    // Multisite: limpiar uno por uno todos los sitios de la red, paginando
+    // para no dejar sitios fuera en redes grandes.
+    $ygb_ofertas_offset = 0;
+    $ygb_ofertas_batch  = 500;
 
-    foreach ($ygb_ofertas_site_ids as $ygb_ofertas_site_id) {
-        switch_to_blog((int) $ygb_ofertas_site_id);
+    do {
+        $ygb_ofertas_sites = get_sites(array(
+            'fields' => 'ids',
+            'number' => $ygb_ofertas_batch,
+            'offset' => $ygb_ofertas_offset,
+        ));
 
-        ygb_ofertas_purge_site_data(
-            $ygb_ofertas_options,
-            $ygb_ofertas_meta_prefixes,
-            $ygb_ofertas_upload_dirs
-        );
+        foreach ($ygb_ofertas_sites as $ygb_ofertas_site_id) {
+            switch_to_blog((int) $ygb_ofertas_site_id);
 
-        restore_current_blog();
-    }
+            ygb_ofertas_purge_site_data(
+                $ygb_ofertas_options,
+                $ygb_ofertas_meta_prefixes,
+                $ygb_ofertas_upload_dirs
+            );
+
+            restore_current_blog();
+        }
+
+        $ygb_ofertas_offset += $ygb_ofertas_batch;
+    } while (count($ygb_ofertas_sites) === $ygb_ofertas_batch);
 
     // Opciones de red (tabla sitemeta) creadas por el plugin. Solo las que
     // empiecen por el prefijo EXCLUSIVO.

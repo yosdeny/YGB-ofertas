@@ -2,7 +2,7 @@
  * YGB Ofertas - Admin JavaScript
  * 
  * @package YGB_Ofertas
- * @version 1.7.7
+ * @version 1.8.2
  */
 
 (function($) {
