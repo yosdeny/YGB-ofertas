@@ -98,8 +98,6 @@ Está desarrollado y probado con Astra, pero al usar hooks estándar de WordPres
 
 == Upgrade Notice ==
 
-= 1.7.10 =
-Actualización recomendada: corrige el error que impedía mostrar el popup (`ygb_ofertas is not defined`) y activa la restricción por páginas específicas.
-
-= 1.7.9 =
-Actualización recomendada: corrige escapado de salidas y validación de ajustes.
+= 1.8.1 = 
+ * Eliminada la opcion "Imagen + texto propio" del tipo de contenido del popup: su titulo y su texto se mezclaban con el titulo y la descripcion generales del popup y resultaba confuso. El popup vuelve a ofrecer dos tipos de contenido: producto de WooCommerce o solo una imagen (ambos con boton opcional). 
+ * Migracion automatica: las instalaciones que tenian activo ese modo pasan a "Solo una imagen" si habia una imagen guardada; si no, vuelven al modo producto. Los campos `custom_title` y `custom_text` dejan de leerse, guardarse y renderizarse.
