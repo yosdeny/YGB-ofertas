@@ -99,7 +99,23 @@ if (!defined('ABSPATH')) {
             
             <?php if (!empty($settings['description'])) : ?>
             <div class="popup-description">
-                <p><?php echo esc_html($settings['description']); ?></p>
+                <?php
+                // La descripción admite HTML limitado a la allowlist de
+                // WordPress (strong, em, a, br, ul, li, p, h1..h6...).
+                //
+                // - wpautop() convierte saltos de línea en párrafos, para que
+                //   un texto plano escrito por el usuario se renderice igual
+                //   que en el editor clásico.
+                // - wp_kses_post() filtra la salida aunque ya se filtró al
+                //   guardar: defensa en profundidad por si el valor llega
+                //   modificado (import, migración, SQL directo...).
+                //
+                // El envoltorio <p> fijo se ha retirado porque ahora el
+                // usuario controla los bloques: wpautop ya añade los <p>
+                // necesarios para texto plano, y si el usuario escribe <p>,
+                // <ul>, <div>... wpautop los respeta.
+                echo wp_kses_post(wpautop((string) $settings['description']));
+                ?>
             </div>
             <?php endif; ?>
             

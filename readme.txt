@@ -4,7 +4,7 @@ Tags: woocommerce, ofertas, popup, descuentos, marketing
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 8.0
-Stable tag: 1.8.2
+Stable tag: 1.8.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -56,6 +56,10 @@ Tienes dos vías: la pestaña **Productos Excluidos** dentro de la configuració
 
 Está desarrollado y probado con Astra, pero al usar hooks estándar de WordPress (`wp_enqueue_scripts`, `wp_footer`) debería funcionar con la mayoría de temas correctamente codificados.
 
+= ¿Puedo usar HTML en la descripción del popup? =
+
+Sí. El campo **Descripción** de la pestaña General admite HTML limitado a la allowlist de WordPress: `strong`, `em`, `b`, `i`, `a`, `br`, `ul`, `ol`, `li`, `p`, `span`, `h1`–`h6`, `blockquote`, etc. Al guardar se filtra con `wp_kses_post()` y al mostrarlo se aplica `wpautop()` (convierte saltos de línea en párrafos) más un segundo `wp_kses_post()` como defensa en profundidad. No se permiten atributos `style` inline ni etiquetas `script`, `iframe`, `object`, `form`; tampoco eventos `on*` ni `javascript:` en `href`.
+
 == Screenshots ==
 
 1. Pestaña General: estado del popup, título, descripción y texto del botón.
@@ -64,6 +68,15 @@ Está desarrollado y probado con Astra, pero al usar hooks estándar de WordPres
 4. Pestaña Programación: rango de fechas y páginas específicas.
 
 == Changelog ==
+
+= 1.8.3 =
+* El campo **Descripción** de la pestaña General admite ahora HTML. Al guardar se filtra con `wp_kses_post()` (allowlist estándar de WordPress: `strong`, `em`, `a`, `br`, `ul`, `li`, `p`, `h1`–`h6`, etc.) en lugar de `sanitize_textarea_field()`, que eliminaba todo el marcado y dejaba el campo inservible para dar formato.
+* En el frontend la descripción se renderiza con `wpautop( wp_kses_post( $descripcion ) )`: `wpautop()` convierte los saltos de línea del texto plano en párrafos y `wp_kses_post()` vuelve a filtrar como defensa en profundidad (por si el valor llega modificado por migración, import o SQL directo).
+* Retirado el envoltorio `<p>` fijo del bloque `.popup-description` en `templates/popup-template.php`: ahora el usuario controla los bloques y `wpautop` ya añade los `<p>` necesarios para texto plano.
+* No se permiten atributos `style` inline ni etiquetas `script`, `iframe`, `object`, `form`; tampoco eventos `on*` ni `javascript:` en `href`. Si necesitas colores o tipografías personalizadas, la vía correcta es añadir una clase al contenedor `.popup-description` y definirla en el tema.
+* El `<textarea>` del panel pasa a `rows="6"` y `class="large-text code"` (fuente monoespaciada) para editar HTML con comodidad. El texto de ayuda de la fila indica qué etiquetas están permitidas.
+* Retrocompatibilidad: las descripciones guardadas en texto plano se siguen viendo correctamente porque `wpautop` las convierte en párrafos. Las descripciones que ya contuvieran HTML (antes se veían como texto literal porque `esc_html` las escapaba) ahora se renderizan como HTML, que es el comportamiento esperado.
+* Unificada la versión en todos los ficheros a 1.8.3 (header, constante `YGB_OFERTAS_VERSION`, `admin.js`, `popup.js` y este readme).
 
 = 1.8.2 =
 * `uninstall.php` reescrito con prefijos EXCLUSIVOS del plugin (`ygb_ofertas_` / `_ygb_ofertas_`): al desinstalar ya no se borran opciones, transients, metadata, roles ni capacidades de otros plugins que pudieran compartir el prefijo genérico `ygb_`. La limpieza de multisite ahora pagina en lotes de 500 sitios en lugar de usar un tope fijo.
@@ -113,6 +126,10 @@ Está desarrollado y probado con Astra, pero al usar hooks estándar de WordPres
 * Versión inicial.
 
 == Upgrade Notice ==
+
+= 1.8.3 =
+* La Descripción del popup admite ahora HTML limitado a la allowlist de WordPress (`strong`, `em`, `a`, `br`, `ul`, `li`, `p`...). Los sitios que tuvieran HTML en ese campo empezarán a verlo renderizado en lugar de como texto escapado. No requiere ninguna acción por parte del usuario: la migración es transparente.
+* No se permiten atributos `style` inline; si necesitas colores personalizados, añade una clase al contenedor `.popup-description` en tu tema.
 
 = 1.8.2 =
 * Corregido el `uninstall.php`: usa prefijos exclusivos del plugin para no borrar datos de otros plugins al desinstalar. Si vas a eliminar YGB Ofertas, actualiza primero a esta versión.

@@ -2,7 +2,7 @@
  * YGB Ofertas - Admin JavaScript
  * 
  * @package YGB_Ofertas
- * @version 1.8.2
+ * @version 1.8.3
  */
 
 (function($) {
@@ -16,6 +16,178 @@
         var div = document.createElement('div');
         div.appendChild(document.createTextNode(text));
         return div.innerHTML;
+    }
+
+    /**
+     * Envuelve la selección del textarea con una etiqueta HTML.
+     *
+     * - Si hay texto seleccionado, lo envuelve: <tag>selección</tag>.
+     * - Si no hay selección, inserta <tag></tag> y deja el cursor dentro.
+     * - Respeta el resto del contenido y mantiene el foco en el textarea.
+     *
+     * @param {HTMLTextAreaElement} textarea
+     * @param {string} tag Nombre de la etiqueta (strong, em, p, h3...).
+     */
+    function wrapSelection(textarea, tag) {
+        if (!textarea) return;
+
+        var start = textarea.selectionStart;
+        var end = textarea.selectionEnd;
+        var value = textarea.value;
+        var selected = value.substring(start, end);
+
+        var openTag = '<' + tag + '>';
+        var closeTag = '</' + tag + '>';
+
+        var replacement;
+        var newCaretStart;
+        var newCaretEnd;
+
+        if (selected.length > 0) {
+            replacement = openTag + selected + closeTag;
+            newCaretStart = start + openTag.length;
+            newCaretEnd = newCaretStart + selected.length;
+        } else {
+            replacement = openTag + closeTag;
+            newCaretStart = start + openTag.length;
+            newCaretEnd = newCaretStart;
+        }
+
+        textarea.value = value.substring(0, start) + replacement + value.substring(end);
+
+        textarea.focus();
+        // setSelectionRange() es la API estándar; el try/catch protege de
+        // navegadores antiguos que la lanzan si el textarea aún no está
+        // pintado. No se usa el patrón obsoleto de document.selection.
+        try {
+            textarea.setSelectionRange(newCaretStart, newCaretEnd);
+        } catch (e) {
+            // Silencio: la selección no es crítica para el funcionamiento.
+        }
+
+        // Notifica a otros scripts (p. ej. validaciones) que el valor cambió.
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    /**
+     * Envuelve la selección en un enlace <a href="...">...</a>.
+     * Pide la URL con window.prompt (no requiere dependencia extra).
+     *
+     * @param {HTMLTextAreaElement} textarea
+     */
+    function insertLink(textarea) {
+        if (!textarea) return;
+
+        var start = textarea.selectionStart;
+        var end = textarea.selectionEnd;
+        var value = textarea.value;
+        var selected = value.substring(start, end);
+
+        var defaultLabel = (typeof ygb_admin !== 'undefined' && ygb_admin.link_prompt)
+            ? ygb_admin.link_prompt
+            : 'URL:';
+
+        var url = window.prompt(defaultLabel, 'https://');
+
+        if (url === null || url === '') {
+            return;
+        }
+
+        // Normaliza: si el usuario no escribió protocolo y no empieza por
+        // almohadilla (ancla), asumimos https://. Dejamos pasar #ancla.
+        url = url.trim();
+        if (url.charAt(0) !== '#' && !/^[a-z]+:\/\//i.test(url) && !/^mailto:/i.test(url) && !/^tel:/i.test(url)) {
+            url = 'https://' + url;
+        }
+
+        var openTag = '<a href="' + url + '">';
+        var closeTag = '</a>';
+        var label = selected.length > 0 ? selected : url;
+        var replacement = openTag + label + closeTag;
+
+        textarea.value = value.substring(0, start) + replacement + value.substring(end);
+
+        var newCaretStart = start + openTag.length;
+        var newCaretEnd = newCaretStart + label.length;
+
+        textarea.focus();
+        try {
+            textarea.setSelectionRange(newCaretStart, newCaretEnd);
+        } catch (e) {
+            // Silencio.
+        }
+
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    /**
+     * Inserta texto literal en la posición del cursor (o reemplaza la
+     * selección actual). Se usa para <br>, listas, etc.
+     *
+     * @param {HTMLTextAreaElement} textarea
+     * @param {string} text
+     */
+    function insertText(textarea, text) {
+        if (!textarea) return;
+
+        var start = textarea.selectionStart;
+        var end = textarea.selectionEnd;
+        var value = textarea.value;
+
+        textarea.value = value.substring(0, start) + text + value.substring(end);
+
+        var newCaret = start + text.length;
+        textarea.focus();
+        try {
+            textarea.setSelectionRange(newCaret, newCaret);
+        } catch (e) {
+            // Silencio.
+        }
+
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    /**
+     * Elimina todas las etiquetas HTML de la selección. No toca el resto del
+     * textarea. Si no hay selección, limpia el contenido completo.
+     *
+     * @param {HTMLTextAreaElement} textarea
+     */
+    function stripTags(textarea) {
+        if (!textarea) return;
+
+        var start = textarea.selectionStart;
+        var end = textarea.selectionEnd;
+        var value = textarea.value;
+
+        var target;
+        var offset;
+
+        if (start === end) {
+            target = value;
+            offset = 0;
+        } else {
+            target = value.substring(start, end);
+            offset = start;
+        }
+
+        // Regex conservadora: solo retira pares <etiqueta ...>...</etiqueta>
+        // y etiquetas sueltas. No pretende ser un parser HTML: es una utilidad
+        // de limpieza rápida para el usuario, no un saneamiento de seguridad
+        // (de eso se encarga wp_kses_post al guardar).
+        var cleaned = target.replace(/<\/?[a-z][a-z0-9]*(\s[^>]*)?>/gi, '');
+
+        textarea.value = value.substring(0, offset) + cleaned + value.substring(offset + target.length);
+
+        var newCaret = offset + cleaned.length;
+        textarea.focus();
+        try {
+            textarea.setSelectionRange(newCaret, newCaret);
+        } catch (e) {
+            // Silencio.
+        }
+
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
     $(document).ready(function() {
@@ -264,6 +436,68 @@
             if (e.keyCode === 13) {
                 e.preventDefault();
                 return false;
+            }
+        });
+
+        /**
+         * Barra de formato del campo Descripción (pestaña General).
+         *
+         * Los botones son type="button" y no tienen atributo name, así que no
+         * entran en la recolección del AJAX de guardado. Simplemente modifican
+         * el textarea #ygb-description; al pulsar "Guardar cambios", el nuevo
+         * valor se envía y el servidor lo filtra con wp_kses_post().
+         *
+         * Delegación de eventos: la pestaña General puede ocultarse/mostrarse
+         * al cambiar de pestaña sin recargar la página, así que enlazamos el
+         * handler a un contenedor estable (document) para no perder los
+         * listeners.
+         */
+        $(document).on('click', '.ygb-desc-toolbar button', function(e) {
+            e.preventDefault();
+
+            var $btn = $(this);
+            var textarea = document.getElementById('ygb-description');
+            if (!textarea) return;
+
+            var wrapTag = $btn.data('ygb-wrap');
+            if (wrapTag) {
+                wrapSelection(textarea, String(wrapTag));
+                return;
+            }
+
+            if ($btn.data('ygb-link')) {
+                insertLink(textarea);
+                return;
+            }
+
+            var insertValue = $btn.attr('data-ygb-insert');
+            if (typeof insertValue === 'string' && insertValue.length > 0) {
+                insertText(textarea, insertValue);
+                return;
+            }
+
+            if ($btn.hasClass('ygb-desc-clear')) {
+                stripTags(textarea);
+            }
+        });
+
+        /**
+         * Atajos de teclado dentro del textarea de descripción: Ctrl/Cmd+B
+         * (negrita) y Ctrl/Cmd+I (cursiva). Coherente con el editor de WP.
+         */
+        $(document).on('keydown', '#ygb-description', function(e) {
+            if (!(e.ctrlKey || e.metaKey)) {
+                return;
+            }
+
+            var key = (e.key || '').toLowerCase();
+
+            if (key === 'b') {
+                e.preventDefault();
+                wrapSelection(this, 'strong');
+            } else if (key === 'i') {
+                e.preventDefault();
+                wrapSelection(this, 'em');
             }
         });
 

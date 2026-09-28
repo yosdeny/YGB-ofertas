@@ -2,8 +2,8 @@
 /**
  * Plugin Name:       YGB Ofertas
  * Description:       Plugin para mostrar popups de ofertas de productos compatible con el tema Astra.
- * Version:           1.8.2
- * Requires at least: 6.0
+ * Version:           1.8.3
+ * Requires at least: 7.0
  * Requires PHP:      8.0
  * Author:            YGB
  * License:           GPL v2 or later
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Definir constantes
-define('YGB_OFERTAS_VERSION', '1.8.2');
+define('YGB_OFERTAS_VERSION', '1.8.3');
 define('YGB_OFERTAS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('YGB_OFERTAS_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -98,7 +98,10 @@ class YGB_Ofertas {
             'search_placeholder' => __('Buscar productos...', 'ygb-ofertas'),
             'saving_text' => __('Guardando...', 'ygb-ofertas'),
             'saved_text' => __('¡Guardado!', 'ygb-ofertas'),
-            'error_text' => __('Error al guardar', 'ygb-ofertas')
+            'error_text' => __('Error al guardar', 'ygb-ofertas'),
+            // Texto del prompt nativo al insertar un enlace desde la barra
+            // de formato del campo Descripción.
+            'link_prompt' => __('URL del enlace:', 'ygb-ofertas')
         ));
 
         // Selector de medios solo donde existe el campo de imagen (pestilla Producto).
@@ -647,7 +650,16 @@ class YGB_Ofertas {
             case 'general':
                 $current_settings['enabled'] = isset($data['enabled']) && $data['enabled'] === '1' ? '1' : '0';
                 $current_settings['title'] = sanitize_text_field($data['title'] ?? '¡Oferta Especial!');
-                $current_settings['description'] = sanitize_textarea_field($data['description'] ?? '');
+
+                // La descripción admite HTML (strong, em, a, br, ul, li, p...).
+                // Se filtra contra la allowlist de WordPress con wp_kses_post().
+                // NUNCA se usa sanitize_textarea_field() aquí, porque eliminaría
+                // todo el marcado y dejaría el campo inservible para dar formato.
+                $description = isset($data['description']) && is_string($data['description'])
+                    ? $data['description']
+                    : '';
+                $current_settings['description'] = wp_kses_post($description);
+
                 $current_settings['button_text'] = sanitize_text_field($data['button_text'] ?? 'Ver Producto');
                 break;
                 
@@ -956,6 +968,37 @@ class YGB_Ofertas {
             background: #f9f9f9;
             border: 1px dashed #ccc;
         }
+        /* Barra de formato del campo Descripción (pestaña General). */
+        .ygb-desc-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 4px;
+            max-width: 800px;
+            padding: 6px 8px;
+            background: #f6f7f7;
+            border: 1px solid #ccd0d4;
+            border-bottom: none;
+            border-radius: 4px 4px 0 0;
+        }
+        .ygb-desc-toolbar .button-small {
+            min-height: 26px;
+            line-height: 24px;
+            padding: 0 8px;
+        }
+        .ygb-desc-toolbar .ygb-desc-sep {
+            display: inline-block;
+            width: 1px;
+            height: 20px;
+            background: #ccd0d4;
+            margin: 0 4px;
+        }
+        .ygb-desc-toolbar + textarea {
+            max-width: 800px;
+            border-top-left-radius: 0;
+            border-top-right-radius: 0;
+            margin-top: -1px;
+        }
         .product-selector-container {
             background: #f9f9f9;
             padding: 20px;
@@ -1091,8 +1134,24 @@ class YGB_Ofertas {
             <tr>
                 <th scope="row"><?php _e('Descripción', 'ygb-ofertas'); ?></th>
                 <td>
-                    <textarea name="description" rows="3" class="regular-text"><?php echo esc_textarea($settings['description']); ?></textarea>
-                    <p class="description"><?php _e('Descripción adicional (opcional)', 'ygb-ofertas'); ?></p>
+                    <div class="ygb-desc-toolbar" role="toolbar" aria-label="<?php esc_attr_e('Formato de la descripción', 'ygb-ofertas'); ?>">
+                        <button type="button" class="button button-small" data-ygb-wrap="strong" title="<?php esc_attr_e('Negrita (Ctrl+B)', 'ygb-ofertas'); ?>"><strong>B</strong></button>
+                        <button type="button" class="button button-small" data-ygb-wrap="em" title="<?php esc_attr_e('Cursiva (Ctrl+I)', 'ygb-ofertas'); ?>"><em>I</em></button>
+                        <button type="button" class="button button-small" data-ygb-wrap="u" title="<?php esc_attr_e('Subrayado', 'ygb-ofertas'); ?>"><span style="text-decoration: underline;">U</span></button>
+                        <span class="ygb-desc-sep" aria-hidden="true"></span>
+                        <button type="button" class="button button-small" data-ygb-link="1" title="<?php esc_attr_e('Insertar enlace', 'ygb-ofertas'); ?>"><?php esc_html_e('Enlace', 'ygb-ofertas'); ?></button>
+                        <button type="button" class="button button-small" data-ygb-insert="&lt;br&gt;" title="<?php esc_attr_e('Salto de línea', 'ygb-ofertas'); ?>"><?php esc_html_e('Salto', 'ygb-ofertas'); ?></button>
+                        <span class="ygb-desc-sep" aria-hidden="true"></span>
+                        <button type="button" class="button button-small" data-ygb-wrap="p" title="<?php esc_attr_e('Párrafo', 'ygb-ofertas'); ?>"><?php esc_html_e('Párrafo', 'ygb-ofertas'); ?></button>
+                        <button type="button" class="button button-small" data-ygb-wrap="h3" title="<?php esc_attr_e('Título', 'ygb-ofertas'); ?>"><?php esc_html_e('Título', 'ygb-ofertas'); ?></button>
+                        <button type="button" class="button button-small" data-ygb-insert="<?php echo esc_attr("<ul>\n  <li></li>\n  <li></li>\n</ul>"); ?>" title="<?php esc_attr_e('Insertar lista', 'ygb-ofertas'); ?>"><?php esc_html_e('Lista', 'ygb-ofertas'); ?></button>
+                        <span class="ygb-desc-sep" aria-hidden="true"></span>
+                        <button type="button" class="button button-small ygb-desc-clear" title="<?php esc_attr_e('Eliminar etiquetas HTML de la selección', 'ygb-ofertas'); ?>"><?php esc_html_e('Limpiar formato', 'ygb-ofertas'); ?></button>
+                    </div>
+                    <textarea name="description" id="ygb-description" rows="8" class="large-text code"><?php echo esc_textarea($settings['description']); ?></textarea>
+                    <p class="description">
+                        <?php _e('Descripción adicional (opcional). Puedes escribir código HTML directamente o usar los botones de la barra superior. Etiquetas permitidas: &lt;strong&gt;, &lt;em&gt;, &lt;u&gt;, &lt;a&gt;, &lt;br&gt;, &lt;p&gt;, &lt;h1&gt;-&lt;h6&gt;, &lt;ul&gt;/&lt;ol&gt;/&lt;li&gt;, &lt;blockquote&gt;, &lt;span&gt;... No se permiten atributos style inline ni etiquetas script/iframe.', 'ygb-ofertas'); ?>
+                    </p>
                 </td>
             </tr>
             
